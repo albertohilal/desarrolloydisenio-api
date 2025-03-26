@@ -1,122 +1,117 @@
 require('dotenv').config();
-const axios = require('axios');
+const fetch = require('node-fetch');
 const mysql = require('mysql2/promise');
-const fs = require('fs');
-const path = require('path');
-const dayjs = require('dayjs');
 
-const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
-const LATITUD_CENTRO = -34.7609;
-const LONGITUD_CENTRO = -58.4255;
+const API_KEY = process.env.GOOGLE_API_KEY;
+const UBICACION = '-34.760000,-58.400000';
 const RADIO_METROS = 10000;
 
-const log = [];
-const logDir = path.join(__dirname, 'logs');
-const logFile = path.join(logDir, `lugares-${dayjs().format('YYYY-MM-DD_HH-mm')}.log`);
-let totalGlobal = 0;
-
-async function main() {
-  if (!fs.existsSync(logDir)) fs.mkdirSync(logDir);
-
-  const connection = await mysql.createConnection({
+async function obtenerConexion() {
+  return await mysql.createConnection({
     host: process.env.DB_HOST,
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
-    database: process.env.DB_DATABASE,
+    database: process.env.DB_DATABASE
   });
+}
 
-  const [rubros] = await connection.execute(
-    'SELECT id, nombre, keyword_google FROM ll_rubros WHERE busqueda = 1'
-  );
+async function obtenerRubrosHabilitados(conn) {
+  const [rows] = await conn.execute('SELECT id, keyword_google FROM ll_rubros WHERE busqueda = 1');
+  return rows;
+}
+
+async function obtenerDetallesLugar(place_id) {
+  const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${place_id}&fields=name,formatted_phone_number,website&key=${API_KEY}`;
+  const response = await fetch(url);
+  const data = await response.json();
+  return data.result || {};
+}
+
+async function guardarLugar(conn, lugar) {
+  const sql = `INSERT IGNORE INTO ll_lugares 
+    (place_id, nombre, direccion, latitud, longitud, telefono, sitio_web, email, rubro_id) 
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+  const valores = [
+    lugar.place_id,
+    lugar.nombre,
+    lugar.direccion,
+    lugar.latitud,
+    lugar.longitud,
+    lugar.telefono,
+    lugar.sitio_web,
+    lugar.email,
+    lugar.rubro_id
+  ];
+
+  try {
+    await conn.execute(sql, valores);
+  } catch (error) {
+    console.error('Error al guardar lugar en la base de datos:', error);
+  }
+}
+
+async function buscarLugaresPorRubro(keyword, conn, rubro_id) {
+  let nextPageToken = null;
+  let intento = 0;
+
+  do {
+    let url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(keyword)}&location=${UBICACION}&radius=${RADIO_METROS}&key=${API_KEY}`;
+    if (nextPageToken) {
+      url += `&pagetoken=${nextPageToken}`;
+      await new Promise(r => setTimeout(r, 2000)); // Esperar para que el token esté activo
+    }
+
+    try {
+      const response = await fetch(url);
+      const data = await response.json();
+
+      if (data.results) {
+        for (const lugar of data.results) {
+          const place_id = lugar.place_id;
+          const nombre = lugar.name;
+          const direccion = lugar.formatted_address;
+          const latitud = lugar.geometry.location.lat;
+          const longitud = lugar.geometry.location.lng;
+
+          const detalles = await obtenerDetallesLugar(place_id);
+          const telefono = detalles.formatted_phone_number || null;
+          const sitio_web = detalles.website || null;
+          const email = null;
+
+          await guardarLugar(conn, {
+            place_id,
+            nombre,
+            direccion,
+            latitud,
+            longitud,
+            telefono,
+            sitio_web,
+            email,
+            rubro_id
+          });
+        }
+      }
+
+      nextPageToken = data.next_page_token || null;
+    } catch (error) {
+      console.error('Error al buscar lugares:', error);
+      break;
+    }
+
+    intento++;
+  } while (nextPageToken && intento < 3);
+}
+
+async function main() {
+  const conn = await obtenerConexion();
+  const rubros = await obtenerRubrosHabilitados(conn);
 
   for (const rubro of rubros) {
-    let insertados = 0;
-    log.push(`\n▶ Rubro: ${rubro.nombre} (${rubro.keyword_google})`);
-    console.log(`\n▶ Buscando lugares para el rubro: ${rubro.nombre}`);
-
-    const places = await buscarLugares(rubro.keyword_google);
-    for (const place of places) {
-      const fueInsertado = await guardarLugar(place, rubro.id, connection);
-      if (fueInsertado) insertados++;
-    }
-
-    log.push(`✔ Insertados para ${rubro.nombre}: ${insertados}`);
-    totalGlobal += insertados;
+    console.log(`Buscando lugares para rubro: ${rubro.keyword_google}`);
+    await buscarLugaresPorRubro(rubro.keyword_google, conn, rubro.id);
   }
 
-  await connection.end();
-  log.push(`\n✅ Total de lugares nuevos insertados: ${totalGlobal}`);
-  fs.writeFileSync(logFile, log.join('\n'), 'utf-8');
-  console.log(`\n✅ Finalizado. Log guardado en logs/${path.basename(logFile)}`);
+  await conn.end();
 }
 
-async function buscarLugares(keyword) {
-  try {
-    const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json`;
-    const response = await axios.get(url, {
-      params: {
-        key: GOOGLE_API_KEY,
-        location: `${LATITUD_CENTRO},${LONGITUD_CENTRO}`,
-        radius: RADIO_METROS,
-        keyword: keyword,
-      },
-    });
-
-    if (response.data.status !== 'OK') {
-      const error = `⚠️ Error de Google API (${keyword}): ${response.data.status}`;
-      console.error(error);
-      log.push(error);
-      return [];
-    }
-
-    return response.data.results;
-  } catch (error) {
-    const msg = `❌ Error buscando lugares (${keyword}): ${error.message}`;
-    console.error(msg);
-    log.push(msg);
-    return [];
-  }
-}
-
-async function guardarLugar(place, rubro_id, connection) {
-  try {
-    const { place_id, name, vicinity, geometry } = place;
-
-    const [rows] = await connection.execute(
-      'SELECT COUNT(*) as total FROM ll_lugares WHERE place_id = ?',
-      [place_id]
-    );
-    if (rows[0].total > 0) {
-      const existe = `↪ Ya existe: ${name}`;
-      console.log(existe);
-      log.push(existe);
-      return false;
-    }
-
-    await connection.execute(
-      `INSERT INTO ll_lugares 
-      (place_id, nombre, direccion, latitud, longitud, rubro_id) 
-      VALUES (?, ?, ?, ?, ?, ?)`,
-      [
-        place_id,
-        name,
-        vicinity || '',
-        geometry.location.lat,
-        geometry.location.lng,
-        rubro_id,
-      ]
-    );
-
-    const guardado = `✔ Guardado: ${name}`;
-    console.log(guardado);
-    log.push(guardado);
-    return true;
-  } catch (error) {
-    const msg = `❌ Error guardando lugar: ${error.message}`;
-    console.error(msg);
-    log.push(msg);
-    return false;
-  }
-}
-
-main();
+main().catch(console.error);
