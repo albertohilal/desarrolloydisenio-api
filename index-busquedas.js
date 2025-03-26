@@ -1,117 +1,105 @@
 require('dotenv').config();
-const fetch = require('node-fetch');
+const axios = require('axios');
 const mysql = require('mysql2/promise');
 
-const API_KEY = process.env.GOOGLE_API_KEY;
-const UBICACION = '-34.760000,-58.400000';
-const RADIO_METROS = 10000;
+const puntos = [
+  { lat: -34.7614, lng: -58.3983 }, // Lomas de Zamora
+  { lat: -34.7217, lng: -58.3925 }, // Banfield
+  { lat: -34.6677, lng: -58.4056 }, // Lanús
+  { lat: -34.6339, lng: -58.4108 }, // Avellaneda
+  { lat: -34.7900, lng: -58.3880 }, // Temperley
+];
 
-async function obtenerConexion() {
-  return await mysql.createConnection({
-    host: process.env.DB_HOST,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_DATABASE
-  });
-}
+const connectionConfig = {
+  host: process.env.DB_HOST,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_DATABASE,
+};
 
-async function obtenerRubrosHabilitados(conn) {
-  const [rows] = await conn.execute('SELECT id, keyword_google FROM ll_rubros WHERE busqueda = 1');
+async function obtenerRubros() {
+  const connection = await mysql.createConnection(connectionConfig);
+  const [rows] = await connection.execute('SELECT id, keyword_google FROM ll_rubros WHERE busqueda = 1');
+  await connection.end();
   return rows;
 }
 
-async function obtenerDetallesLugar(place_id) {
-  const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${place_id}&fields=name,formatted_phone_number,website&key=${API_KEY}`;
-  const response = await fetch(url);
-  const data = await response.json();
-  return data.result || {};
+async function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-async function guardarLugar(conn, lugar) {
-  const sql = `INSERT IGNORE INTO ll_lugares 
-    (place_id, nombre, direccion, latitud, longitud, telefono, sitio_web, email, rubro_id) 
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
-  const valores = [
+async function buscarLugares(rubro, punto) {
+  const lugaresTotales = [];
+  let pagetoken = null;
+  let intentos = 0;
+
+  do {
+    let url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${punto.lat},${punto.lng}&radius=10000&keyword=${encodeURIComponent(rubro.keyword_google)}&key=${process.env.GOOGLE_API_KEY}`;
+    if (pagetoken) url += `&pagetoken=${pagetoken}`;
+
+    if (pagetoken) await delay(2000); // Esperar antes de usar el token
+
+    const response = await axios.get(url);
+    const data = response.data;
+
+    if (data.results && data.results.length > 0) {
+      lugaresTotales.push(...data.results);
+    }
+
+    pagetoken = data.next_page_token || null;
+    intentos++;
+  } while (pagetoken && intentos < 3);
+
+  return lugaresTotales;
+}
+
+async function guardarLugar(lugar, rubro_id) {
+  const connection = await mysql.createConnection(connectionConfig);
+
+  const sql = `
+    INSERT IGNORE INTO ll_lugares (
+      place_id, nombre, direccion, latitud, longitud, telefono, sitio_web, email, rubro_id
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `;
+
+  const values = [
     lugar.place_id,
-    lugar.nombre,
-    lugar.direccion,
-    lugar.latitud,
-    lugar.longitud,
-    lugar.telefono,
-    lugar.sitio_web,
-    lugar.email,
-    lugar.rubro_id
+    lugar.name || '',
+    lugar.vicinity || '',
+    lugar.geometry?.location?.lat || null,
+    lugar.geometry?.location?.lng || null,
+    '', // teléfono no viene en nearbysearch
+    '', // sitio_web no viene en nearbysearch
+    '', // email no viene en nearbysearch
+    rubro_id,
   ];
 
   try {
-    await conn.execute(sql, valores);
+    await connection.execute(sql, values);
   } catch (error) {
-    console.error('Error al guardar lugar en la base de datos:', error);
+    console.error(`Error SQL: ${error.message}`);
+  } finally {
+    await connection.end();
   }
-}
-
-async function buscarLugaresPorRubro(keyword, conn, rubro_id) {
-  let nextPageToken = null;
-  let intento = 0;
-
-  do {
-    let url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(keyword)}&location=${UBICACION}&radius=${RADIO_METROS}&key=${API_KEY}`;
-    if (nextPageToken) {
-      url += `&pagetoken=${nextPageToken}`;
-      await new Promise(r => setTimeout(r, 2000)); // Esperar para que el token esté activo
-    }
-
-    try {
-      const response = await fetch(url);
-      const data = await response.json();
-
-      if (data.results) {
-        for (const lugar of data.results) {
-          const place_id = lugar.place_id;
-          const nombre = lugar.name;
-          const direccion = lugar.formatted_address;
-          const latitud = lugar.geometry.location.lat;
-          const longitud = lugar.geometry.location.lng;
-
-          const detalles = await obtenerDetallesLugar(place_id);
-          const telefono = detalles.formatted_phone_number || null;
-          const sitio_web = detalles.website || null;
-          const email = null;
-
-          await guardarLugar(conn, {
-            place_id,
-            nombre,
-            direccion,
-            latitud,
-            longitud,
-            telefono,
-            sitio_web,
-            email,
-            rubro_id
-          });
-        }
-      }
-
-      nextPageToken = data.next_page_token || null;
-    } catch (error) {
-      console.error('Error al buscar lugares:', error);
-      break;
-    }
-
-    intento++;
-  } while (nextPageToken && intento < 3);
 }
 
 async function main() {
-  const conn = await obtenerConexion();
-  const rubros = await obtenerRubrosHabilitados(conn);
+  const rubros = await obtenerRubros();
 
   for (const rubro of rubros) {
-    console.log(`Buscando lugares para rubro: ${rubro.keyword_google}`);
-    await buscarLugaresPorRubro(rubro.keyword_google, conn, rubro.id);
+    for (const punto of puntos) {
+      console.log(`Buscando lugares para rubro: ${rubro.keyword_google} en (${punto.lat},${punto.lng})`);
+      const lugares = await buscarLugares(rubro, punto);
+
+      for (const lugar of lugares) {
+        await guardarLugar(lugar, rubro.id);
+      }
+
+      console.log(`Total guardados para este punto: ${lugares.length}`);
+    }
   }
 
-  await conn.end();
+  console.log('Finalizado.');
 }
 
-main().catch(console.error);
+main();
