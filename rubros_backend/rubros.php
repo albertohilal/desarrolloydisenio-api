@@ -8,9 +8,20 @@ $conn->set_charset("utf8");
 // Encabezado para respuesta JSON
 header('Content-Type: application/json');
 
-// === GET: Listar rubros ===
+// === GET: Listar rubros con fuente textual ===
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
-    $sql = "SELECT id, nombre_es AS nombre_es, keyword_google, busqueda FROM ll_rubros ORDER BY nombre";
+    $sql = "
+        SELECT 
+            r.id, 
+            r.nombre AS nombre_es, 
+            r.keyword_google, 
+            r.busqueda,
+            f.nombre AS fuente
+        FROM ll_rubros r
+        LEFT JOIN ll_fuentes f ON r.fuente_id = f.id
+        ORDER BY r.nombre
+    ";
+
     $resultado = $conn->query($sql);
 
     if (!$resultado) {
@@ -28,7 +39,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     exit;
 }
 
-// === POST: Actualizar rubro ===
+// === POST: Actualizar rubro (excepto fuente) ===
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['id'])) {
     $id = intval($_GET['id']);
     $json = file_get_contents("php://input");
@@ -44,6 +55,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['id'])) {
     $keyword_google = $conn->real_escape_string($datos['keyword_google']);
     $busqueda = intval($datos['busqueda']);
 
+    // No se actualiza fuente_id aquí
     $sql = "UPDATE ll_rubros 
             SET nombre = '$nombre_es', 
                 keyword_google = '$keyword_google', 

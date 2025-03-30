@@ -39,6 +39,10 @@
     button:hover {
       background-color: darkorange;
     }
+    .fuente {
+      font-size: 0.9em;
+      color: #555;
+    }
   </style>
 </head>
 <body>
@@ -50,6 +54,7 @@
         <th>Keyword Google</th>
         <th>Busqueda</th>
         <th>Acción</th>
+        <th>Fuente</th>
       </tr>
     </thead>
     <tbody></tbody>
@@ -59,7 +64,13 @@
     async function obtenerRubros() {
       try {
         const response = await fetch('rubros.php');
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
         const text = await response.text();
+
         try {
           const rubros = JSON.parse(text);
           const tbody = document.querySelector('#tabla-rubros tbody');
@@ -77,14 +88,15 @@
                 </select>
               </td>
               <td><button onclick="actualizarRubro(${rubro.id})">Actualizar</button></td>
+              <td class="fuente">${rubro.fuente || '—'}</td>
             `;
             tbody.appendChild(tr);
           });
         } catch (e) {
-          console.error('Respuesta no válida JSON:', text);
+          console.error('Respuesta no es JSON válido:', text);
         }
       } catch (error) {
-        console.error('Error al obtener rubros:', error);
+        console.error('Error al obtener rubros:', error.message);
       }
     }
 

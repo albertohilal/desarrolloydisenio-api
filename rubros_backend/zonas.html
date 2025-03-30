@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Editar Zonas</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f0f2f5;
+      margin: 2rem;
+    }
+    h1 {
+      text-align: center;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 2rem;
+    }
+    th, td {
+      padding: 0.75rem;
+      border: 1px solid #ccc;
+      text-align: left;
+    }
+    th {
+      background-color: #eee;
+    }
+    input[type="text"], select {
+      width: 95%;
+      padding: 5px;
+    }
+    button {
+      padding: 5px 10px;
+      background-color: orange;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: darkorange;
+    }
+  </style>
+</head>
+<body>
+  <h1>Editar Zonas</h1>
+  <table id="tabla-zonas">
+    <thead>
+      <tr>
+        <th>Nombre</th>
+        <th>Latitud</th>
+        <th>Longitud</th>
+        <th>Busqueda</th>
+        <th>Activo</th>
+        <th>Acción</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <script>
+    async function obtenerZonas() {
+      try {
+        const response = await fetch('zonas.php');
+        const data = await response.json();
+        const tbody = document.querySelector('#tabla-zonas tbody');
+        tbody.innerHTML = '';
+
+        data.forEach(zona => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td><input type="text" value="${zona.nombre}" id="nombre-${zona.id}"></td>
+            <td><input type="text" value="${zona.latitud}" id="lat-${zona.id}"></td>
+            <td><input type="text" value="${zona.longitud}" id="lng-${zona.id}"></td>
+            <td>
+              <select id="busqueda-${zona.id}">
+                <option value="1" ${zona.busqueda == 1 ? 'selected' : ''}>Sí</option>
+                <option value="0" ${zona.busqueda == 0 ? 'selected' : ''}>No</option>
+              </select>
+            </td>
+            <td>
+              <select id="activo-${zona.id}">
+                <option value="1" ${zona.activo == 1 ? 'selected' : ''}>Sí</option>
+                <option value="0" ${zona.activo == 0 ? 'selected' : ''}>No</option>
+              </select>
+            </td>
+            <td><button onclick="actualizarZona(${zona.id})">Actualizar</button></td>
+          `;
+          tbody.appendChild(tr);
+        });
+      } catch (error) {
+        console.error('Error al obtener zonas:', error);
+      }
+    }
+
+    async function actualizarZona(id) {
+      const nombre = document.getElementById(`nombre-${id}`).value;
+      const latitud = document.getElementById(`lat-${id}`).value;
+      const longitud = document.getElementById(`lng-${id}`).value;
+      const busqueda = document.getElementById(`busqueda-${id}`).value;
+      const activo = document.getElementById(`activo-${id}`).value;
+
+      try {
+        const response = await fetch(`zonas.php?id=${id}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ nombre, latitud, longitud, busqueda, activo })
+        });
+
+        const resultado = await response.text();
+        alert(resultado);
+      } catch (error) {
+        console.error('Error al actualizar zona:', error);
+      }
+    }
+
+    obtenerZonas();
+  </script>
+</body>
+</html>
