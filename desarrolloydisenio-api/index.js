@@ -1,52 +1,40 @@
-require('dotenv').config();
-const axios = require('axios');
-const createCsvWriter = require('csv-writer').createObjectCsvWriter;
+const express = require('express');
+const mysql = require('mysql2/promise');
+const dotenv = require('dotenv');
+const cors = require('cors');
+const path = require('path');
 
-const API_KEY = process.env.GOOGLE_API_KEY;
-const location = '-34.7609,-58.4258'; // Lomas de Zamora
-const radius = 10000;
-const type = 'store'; // Podés cambiarlo por otro rubro
+// Cargar variables de entorno
+dotenv.config();
 
-const csvWriter = createCsvWriter({
-  path: 'places.csv',
-  header: [
-    {id: 'place_id', title: 'Place ID'},
-    {id: 'name', title: 'Nombre'},
-    {id: 'address', title: 'Dirección'},
-    {id: 'phone', title: 'Teléfono'},
-    {id: 'email', title: 'Email'}, // Placeholder
-    {id: 'types', title: 'Rubros'}
-  ]
+// Inicializar Express
+const app = express();
+app.use(express.json());
+app.use(cors());
+
+// Servir archivos estáticos desde la carpeta 'public'
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Crear pool de conexiones MySQL usando variables del .env
+const pool = mysql.createPool({
+  host: process.env.DB_HOST,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_DATABASE, // ⚠️ IMPORTANTE: asegúrate que esté definido en tu .env
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0
 });
 
-async function getPlaces(nextPageToken = '') {
-  const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${location}&radius=${radius}&type=${type}&key=${API_KEY}${nextPageToken ? `&pagetoken=${nextPageToken}` : ''}`;
-  const response = await axios.get(url);
-  return response.data;
-}
+// Exportar el pool para usarlo en otras partes del proyecto
+module.exports = { pool };
 
-async function getPlaceDetails(placeId) {
-  const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=name,formatted_address,international_phone_number,types&key=${API_KEY}`;
-  const response = await axios.get(url);
-  return response.data.result;
-}
+// Importar rutas y pasar el pool por inyección
+const rubrosRoutes = require('./routes/rubros');
+app.use('/api/rubros', rubrosRoutes);
 
-(async () => {
-  let results = [];
-  let data = await getPlaces();
-
-  for (const place of data.results) {
-    const details = await getPlaceDetails(place.place_id);
-    results.push({
-      place_id: place.place_id,
-      name: details.name,
-      address: details.formatted_address,
-      phone: details.international_phone_number || '',
-      email: '', // No se obtiene desde Places
-      types: details.types.join(', ')
-    });
-  }
-
-  await csvWriter.writeRecords(results);
-  console.log('Datos guardados en places.csv');
-})();
+// Levantar el servidor
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`✅ Servidor iniciado en http://localhost:${PORT}`);
+});

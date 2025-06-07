@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Soluciones para Comercios</title>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Montserrat', sans-serif;
+      background: #eaf4fb;
+      color: #0a2540;
+    }
+
+    header {
+      background: #eaf4fb;
+      padding: 1rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    nav a {
+      margin: 0 1rem;
+      text-decoration: none;
+      color: #0a2540;
+      font-weight: 500;
+    }
+
+    .cta-button {
+      background: #007bff;
+      color: white;
+      padding: 0.5rem 1.25rem;
+      border: none;
+      border-radius: 5px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+
+    .cta-button:hover {
+      background: #005dc5;
+    }
+
+    .hero {
+      text-align: center;
+      padding: 4rem 2rem;
+      background: linear-gradient(to bottom, #75aadb, #537aa1);
+      color: white;
+    }
+
+    .hero h1 {
+      font-size: 2.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .hero p {
+      font-size: 1.2rem;
+      max-width: 700px;
+      margin: 0 auto 2rem;
+    }
+
+    .section {
+      padding: 3rem 2rem;
+      text-align: center;
+    }
+
+    .section h2 {
+      font-size: 2rem;
+      margin-bottom: 2rem;
+    }
+
+    .cards {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 2rem;
+    }
+
+    .card {
+      background: white;
+      padding: 2rem;
+      border-radius: 10px;
+      width: 300px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    }
+
+    .card img {
+      width: 50px;
+      margin-bottom: 1rem;
+    }
+
+    svg {
+      display: block;
+      width: 100%;
+    }
+
+    @media (max-width: 768px) {
+      .cards {
+        flex-direction: column;
+        align-items: center;
+      }
+
+      .hero h1 {
+        font-size: 2rem;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div><strong>desarrolloydisenio.com.ar</strong></div>
+    <nav>
+      <a href="#">Inicio</a>
+      <a href="#">Comercios</a>
+      <a href="#">Beneficios</a>
+      <button class="cta-button">Solicitar asesoramiento</button>
+    </nav>
+  </header>
+
+  <section class="hero">
+    <h1>Soluciones para Comercios</h1>
+    <p>Impulsamos tu comercio a través de soluciones digitales personalizadas, diseñadas para aumentar tus ventas y mejorar la experiencia del cliente online.</p>
+    <button class="cta-button">Contactar</button>
+  </section>
+
+  <!-- SVG de curva -->
+  <svg viewBox="0 0 1440 100"><path fill="#eaf4fb" d="M0,96L1440,0L1440,320L0,320Z"></path></svg>
+
+  <section class="section" style="background:#eaf4fb;">
+    <h2>Beneficios</h2>
+    <div class="cards">
+      <div class="card">
+        <img src="https://cdn-icons-png.flaticon.com/512/609/609803.png" alt="Visibilidad" />
+        <h3>Visibilidad Online</h3>
+        <p>Mejoramos tu presencia digital para atraer más clientes potenciales.</p>
+      </div>
+      <div class="card">
+        <img src="https://cdn-icons-png.flaticon.com/512/1170/1170576.png" alt="Ventas" />
+        <h3>Aumento de Ventas</h3>
+        <p>Desarrollamos estrategias que convierten visitantes en compradores.</p>
+      </div>
+      <div class="card">
+        <img src="https://cdn-icons-png.flaticon.com/512/1828/1828843.png" alt="Estrategia" />
+        <h3>Estrategias Personalizadas</h3>
+        <p>Planes adaptados a las necesidades específicas de tu comercio.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Proyectos</h2>
+    <div class="card" style="margin: 0 auto;">
+      <img src="https://cdn-icons-png.flaticon.com/512/1077/1077114.png" alt="Tienda Online" />
+      <h3>Sitios Web y Tiendas Online</h3>
+      <p>Diseñamos sitios web modernos, funcionales y atractivos, optimizados para móviles.</p>
+    </div>
+  </section>
+
+</body>
+</html>
