@@ -1,0 +1,66 @@
+    <!DOCTYPE html>
+<html>
+  <head>
+    <title>Zonas coloreadas</title>
+    <meta charset="UTF-8" />
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCVi9XWRLMqpVu3RhSzgksO0YmFxZrtBNE"></script>
+    <script>
+      function initMap() {
+        const mapa = new google.maps.Map(document.getElementById("map"), {
+          zoom: 15,
+          center: { lat: -34.7607662, lng: -58.4083934 },
+        });
+
+        // Puntos de la grilla 3x3 (ordenados de arriba hacia abajo y de izquierda a derecha)
+        const puntos = [
+          { lat: -34.7697662, lng: -58.4193934 }, // fila 0, col 0
+          { lat: -34.7697662, lng: -58.4083934 }, // fila 0, col 1
+          { lat: -34.7697662, lng: -58.3973934 }, // fila 0, col 2
+          { lat: -34.7607662, lng: -58.4193934 }, // fila 1, col 0
+          { lat: -34.7607662, lng: -58.4083934 }, // fila 1, col 1
+          { lat: -34.7607662, lng: -58.3973934 }, // fila 1, col 2
+          { lat: -34.7517662, lng: -58.4193934 }, // fila 2, col 0
+          { lat: -34.7517662, lng: -58.4083934 }, // fila 2, col 1
+          { lat: -34.7517662, lng: -58.3973934 }, // fila 2, col 2
+        ];
+
+        // Convierte los puntos a una matriz 3x3
+        const grilla = [
+          puntos.slice(0, 3),
+          puntos.slice(3, 6),
+          puntos.slice(6, 9),
+        ];
+
+        // Genera automáticamente los 4 cuadrados válidos
+        const zonas = [];
+        for (let i = 0; i < 2; i++) {
+          for (let j = 0; j < 2; j++) {
+            const zona = [
+              grilla[i][j],
+              grilla[i][j + 1],
+              grilla[i + 1][j + 1],
+              grilla[i + 1][j],
+            ];
+            zonas.push(zona);
+          }
+        }
+
+        // Dibuja cada polígono en el mapa
+        zonas.forEach(zona => {
+          new google.maps.Polygon({
+            paths: zona,
+            strokeColor: "#000700", // amarillo
+            strokeOpacity: 0.8,
+            strokeWeight: 2,
+            fillColor: "#FFD700",   // amarillo
+            fillOpacity: 0.3,
+            map: mapa,
+          });
+        });
+      }
+    </script>
+  </head>
+  <body onload="initMap()">
+    <div id="map" style="height: 100vh; width: 100%;"></div>
+  </body>
+</html>

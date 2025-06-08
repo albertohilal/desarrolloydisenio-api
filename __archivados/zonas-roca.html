@@ -1,0 +1,60 @@
+
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Grilla Línea Roca</title>
+    <meta charset="UTF-8" />
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCVi9XWRLMqpVu3RhSzgksO0YmFxZrtBNE"></script>
+    <script>
+      function initMap() {
+        const mapa = new google.maps.Map(document.getElementById("map"), {
+          zoom: 11,
+          center: { lat: -34.78, lng: -58.39 },
+        });
+
+        // Zonas ficticias de ejemplo: cada una con 4 puntos
+        const zonas = [
+          [
+            { lat: -34.658, lng: -58.375 },
+            { lat: -34.658, lng: -58.365 },
+            { lat: -34.668, lng: -58.365 },
+            { lat: -34.668, lng: -58.375 },
+          ],
+          [
+            { lat: -34.668, lng: -58.375 },
+            { lat: -34.668, lng: -58.365 },
+            { lat: -34.678, lng: -58.365 },
+            { lat: -34.678, lng: -58.375 },
+          ],
+          [
+            { lat: -34.678, lng: -58.375 },
+            { lat: -34.678, lng: -58.365 },
+            { lat: -34.688, lng: -58.365 },
+            { lat: -34.688, lng: -58.375 },
+          ],
+          [
+            { lat: -34.688, lng: -58.375 },
+            { lat: -34.688, lng: -58.365 },
+            { lat: -34.698, lng: -58.365 },
+            { lat: -34.698, lng: -58.375 },
+          ]
+        ];
+
+        zonas.forEach(zona => {
+          new google.maps.Polygon({
+            paths: zona,
+            strokeColor: "#000000",
+            strokeOpacity: 0.8,
+            strokeWeight: 2,
+            fillColor: "#FFD700",
+            fillOpacity: 0.3,
+            map: mapa,
+          });
+        });
+      }
+    </script>
+  </head>
+  <body onload="initMap()">
+    <div id="map" style="height: 100vh; width: 100%;"></div>
+  </body>
+</html>
