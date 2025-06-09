@@ -1,21 +1,27 @@
 const express = require('express');
-const app = express();
 const cors = require('cors');
+const path = require('path');
+
+const app = express();
+const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(cors());
 app.use(express.json());
-app.use(express.static('public')); // <-- Esta línea sirve archivos como cuadriculas.html
+
+// Archivos estáticos
+app.use(express.static(path.join(__dirname, 'public')));
 
 // Rutas API
 const grillasRoutes = require('./routes/grillas');
-const rubrosRoutes = require('./routes/rubros');
-
 app.use('/api/grillas', grillasRoutes);
-app.use('/api/rubros', rubrosRoutes);
 
-// Puerto
-const PORT = process.env.PORT || 3000;
+// Redirección inicial opcional
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'grilla_mapa.html'));
+});
+
+// Iniciar servidor
 app.listen(PORT, () => {
-  console.log(`Servidor escuchando en http://localhost:${PORT}`);
+  console.log(`✅ Servidor escuchando en http://localhost:${PORT}`);
 });

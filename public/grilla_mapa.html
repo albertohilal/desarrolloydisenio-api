@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Grilla sobre mapa</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <style>
+    #map {
+      height: 100vh;
+      width: 100%;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script>
+    const OFFSET = 0.0045;
+
+    const map = L.map('map').setView([-34.7, -58.5], 12);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    fetch('/api/grillas/zona/conurbano_sur_v1')
+      .then(res => {
+        if (!res.ok) throw new Error(`Error ${res.status}`);
+        return res.json();
+      })
+      .then(data => {
+        data.forEach(celda => {
+          const lat = parseFloat(celda.latitud);
+          const lng = parseFloat(celda.longitud);
+
+          if (isNaN(lat) || isNaN(lng)) return;
+
+          const bounds = [
+            [lat - OFFSET / 2, lng - OFFSET / 2],
+            [lat + OFFSET / 2, lng + OFFSET / 2]
+          ];
+
+          L.rectangle(bounds, {
+            color: celda.estado === 'seleccionado' ? 'red' : 'blue',
+            weight: 1,
+            fillOpacity: 0.3
+          }).addTo(map)
+            .bindPopup(`Celda: ${celda.codigo}`);
+        });
+      })
+      .catch(err => {
+        console.error('Error al cargar grillas:', err);
+        alert('No se pudieron cargar las grillas.');
+      });
+  </script>
+</body>
+</html>
