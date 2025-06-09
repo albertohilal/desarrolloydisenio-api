@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Grilla interactiva</title>
+  <style>
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(20, 30px); /* ajustar según columnas reales */
+      gap: 2px;
+    }
+    .cell {
+      width: 30px;
+      height: 30px;
+      border: 1px solid #ccc;
+      font-size: 9px;
+      text-align: center;
+      line-height: 30px;
+      cursor: pointer;
+    }
+    .pendiente { background-color: #f8d7da; }
+    .seleccionado { background-color: #fff3cd; }
+    .procesado { background-color: #d4edda; }
+    button:disabled {
+      background-color: #ccc;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body>
+
+<h3>Grilla: conurbano_sur_v1 ✅</h3>
+
+<p>
+  <button id="exportarBtn" disabled onclick="window.location.href='/api/grillas/exportar?zona=conurbano_sur_v1'">
+    📤 Exportar seleccionados a CSV
+  </button>
+  <span id="contador">(0 seleccionados)</span>
+</p>
+
+<div id="grilla" class="grid"></div>
+
+<script>
+const ESTADOS = ['pendiente', 'seleccionado', 'procesado'];
+let totalSeleccionados = 0;
+
+function siguienteEstado(actual) {
+  const idx = ESTADOS.indexOf(actual);
+  return ESTADOS[(idx + 1) % ESTADOS.length];
+}
+
+function actualizarContador(delta) {
+  totalSeleccionados += delta;
+  document.getElementById('contador').textContent = `(${totalSeleccionados} seleccionados)`;
+
+  const btn = document.getElementById('exportarBtn');
+  btn.disabled = totalSeleccionados === 0;
+}
+
+fetch('/api/grillas/zona?zona=conurbano_sur_v1')
+  .then(res => res.json())
+  .then(data => {
+    const contenedor = document.getElementById('grilla');
+    totalSeleccionados = 0;
+
+    data.forEach(celda => {
+      const div = document.createElement('div');
+      div.className = `cell ${celda.estado}`;
+      div.textContent = celda.codigo;
+      div.title = `Fila ${celda.fila} - Columna ${celda.columna}`;
+
+      if (celda.estado === 'seleccionado') totalSeleccionados++;
+
+      div.addEventListener('click', () => {
+        console.log('Click en celda', celda.codigo, 'ID:', celda.id);
+
+        const nuevoEstado = siguienteEstado(celda.estado);
+
+        fetch('/api/grillas/actualizar-estado', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ id: celda.id, estado: nuevoEstado })
+        })
+        .then(response => {
+          if (!response.ok) throw new Error('Error al actualizar');
+          if (celda.estado === 'seleccionado') actualizarContador(-1);
+          if (nuevoEstado === 'seleccionado') actualizarContador(1);
+          celda.estado = nuevoEstado;
+          div.className = `cell ${nuevoEstado}`;
+        })
+        .catch(error => {
+          alert('No se pudo actualizar el estado');
+          console.error(error);
+        });
+      });
+
+      contenedor.appendChild(div);
+    });
+
+    actualizarContador(0); // inicializa contador y botón
+  });
+</script>
+
+</body>
+</html>
