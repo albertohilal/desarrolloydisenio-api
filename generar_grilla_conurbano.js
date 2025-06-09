@@ -1,44 +1,64 @@
-
 require('dotenv').config();
-const db = require('./db');
+const mysql = require('mysql2/promise');
 
-const deltaLat = 0.009; // ~1000m
-const deltaLng = 0.011; // ~1000m
+// Configuración de la grilla
+const grillaNombre = 'conurbano_sur_v1_extendida';
+const zona = 'AMBA extendido';
+const descripcion = 'Grilla amplia para selección interactiva sobre Conurbano y alrededores';
 
-const latStart = -34.60;  // norte (Avellaneda)
-const latEnd = -35.10;    // sur (La Plata)
-const lngStart = -58.60;  // oeste
-const lngEnd = -57.80;    // este
+// Coordenada de inicio (esquina noroeste)
+const latInicio = -34.400000;
+const lngInicio = -58.600000;
 
-const grillaNombre = 'conurbano_sur';
+// Tamaño de celda (grados ≈ 1000m)
+const tamañoCelda = 0.009;
+const filas = 60;
+const columnas = 40;
+const BATCH_SIZE = 500;
 
-async function generarGrilla() {
-  try {
-    await db.execute('DELETE FROM ll_grilla WHERE grilla_nombre = ?', [grillaNombre]);
-    console.log(`🧹 Eliminadas celdas existentes de grilla '${grillaNombre}'.`);
+(async () => {
+  const connection = await mysql.createConnection({
+    host: process.env.DB_HOST,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_DATABASE
+  });
 
-    let fila = 0;
-    for (let lat = latStart; lat >= latEnd; lat -= deltaLat, fila++) {
-      let columna = 0;
-      for (let lng = lngStart; lng <= lngEnd; lng += deltaLng, columna++) {
-        const centroLat = lat - deltaLat / 2;
-        const centroLng = lng + deltaLng / 2;
-        const codigo = `F${fila}_C${columna}`;
+  console.log(`🧩 Generando grilla "${grillaNombre}" (${filas}x${columnas})...`);
 
-        await db.execute(
-          'INSERT INTO ll_grilla (grilla_nombre, codigo, fila, columna, latitud, longitud, estado) VALUES (?, ?, ?, ?, ?, ?, ?)',
-          [grillaNombre, codigo, fila, columna, centroLat, centroLng, 'pendiente']
-        );
-        console.log(`✅ Insertado: ${codigo}`);
-      }
+  // ⚠️ Limpiar registros anteriores
+  await connection.execute('DELETE FROM ll_grilla WHERE grilla_nombre = ?', [grillaNombre]);
+
+  const valores = [];
+
+  for (let fila = 0; fila < filas; fila++) {
+    for (let columna = 0; columna < columnas; columna++) {
+      const lat = latInicio - fila * tamañoCelda;
+      const lng = lngInicio + columna * tamañoCelda;
+      const codigo = `F${fila}_C${columna}`;
+      valores.push([grillaNombre, codigo, fila, columna, lat, lng, 'pendiente']);
     }
-
-    console.log('✅ Grilla generada exitosamente.');
-  } catch (error) {
-    console.error('❌ Error al generar grilla:', error.message);
-  } finally {
-    process.exit();
   }
-}
 
-generarGrilla();
+  for (let i = 0; i < valores.length; i += BATCH_SIZE) {
+    const batch = valores.slice(i, i + BATCH_SIZE);
+    const placeholders = batch.map(() => '(?, ?, ?, ?, ?, ?, ?)').join(', ');
+    const flatValues = batch.flat();
+
+    await connection.execute(
+      `INSERT INTO ll_grilla (grilla_nombre, codigo, fila, columna, latitud, longitud, estado)
+       VALUES ${placeholders}`,
+      flatValues
+    );
+  }
+
+  // Registrar metadatos
+  await connection.execute(
+    `INSERT IGNORE INTO ll_grillas (nombre, zona, descripcion, activo)
+     VALUES (?, ?, ?, 1)`,
+    [grillaNombre, zona, descripcion]
+  );
+
+  console.log(`✅ Grilla "${grillaNombre}" generada con éxito (${valores.length} celdas)`);
+  await connection.end();
+})();

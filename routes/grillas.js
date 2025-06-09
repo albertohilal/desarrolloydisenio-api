@@ -37,4 +37,21 @@ router.get('/cuadriculas', async (req, res) => {
   }
 });
 
+// Ruta: Obtener zonas de la grilla "conurbano_sur"
+
+router.get('/zonas', async (req, res) => {
+  try {
+    const [result] = await pool.query(`
+      SELECT fila, columna, latitud, longitud 
+      FROM ll_grilla 
+      WHERE grilla_nombre = 'conurbano_sur'
+    `);
+    res.json(result);
+  } catch (error) {
+    console.error('Error al obtener zonas:', error);
+    res.status(500).json({ error: 'Error al obtener zonas' });
+  }
+});
+
+
 module.exports = router;

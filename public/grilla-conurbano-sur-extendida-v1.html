@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Grilla Extendida: Conurbano Sur v1</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <style>
+    #map { height: 100vh; }
+    .legend {
+      background: white;
+      padding: 10px;
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      font-family: sans-serif;
+      font-size: 13px;
+      border-radius: 5px;
+      box-shadow: 0 0 5px rgba(0,0,0,0.3);
+    }
+    .legend div { margin-bottom: 5px; }
+    .box { display: inline-block; width: 12px; height: 12px; margin-right: 5px; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div class="legend">
+    <div><span class="box" style="background:#007bff"></span> Pendiente</div>
+    <div><span class="box" style="background:green"></span> Seleccionado</div>
+    <div><span class="box" style="background:orange"></span> Procesado</div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script>
+    const map = L.map('map').setView([-34.72, -58.47], 11);
+    const cellSize = 0.009;
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap'
+    }).addTo(map);
+
+    fetch('grilla-conurbano_sur_v1_extendida.json')
+      .then(res => res.json())
+      .then(data => {
+        data.forEach(punto => {
+          const lat = parseFloat(punto.latitud);
+          const lng = parseFloat(punto.longitud);
+
+          const bounds = [
+            [lat - cellSize / 2, lng - cellSize / 2],
+            [lat + cellSize / 2, lng + cellSize / 2]
+          ];
+
+          const color = punto.estado === 'seleccionado' ? 'green' :
+                        punto.estado === 'procesado' ? 'orange' : '#007bff';
+
+          const rect = L.rectangle(bounds, {
+            color: color,
+            weight: 1,
+            fillOpacity: 0.3
+          }).addTo(map);
+
+          rect.on('click', () => {
+            const seleccionado = rect.options.color === 'green';
+            const nuevoColor = seleccionado ? '#007bff' : 'green';
+            const nuevoEstado = seleccionado ? 'pendiente' : 'seleccionado';
+
+            rect.setStyle({ color: nuevoColor });
+
+            fetch('/api/grilla/seleccionar', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                codigo: punto.codigo,
+                nuevoEstado: nuevoEstado
+              })
+            });
+          });
+
+          rect.bindPopup(`${punto.codigo} (${punto.estado})`);
+        });
+      });
+  </script>
+</body>
+</html>
