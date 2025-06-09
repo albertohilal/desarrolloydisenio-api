@@ -74,5 +74,25 @@ router.get('/exportar', async (req, res) => {
     res.status(500).json({ error: 'Error al exportar CSV' });
   }
 });
+// Al final de grillas.js, antes de module.exports
+router.post('/seleccionar-multiples', async (req, res) => {
+  const { ids, estado } = req.body;
+  if (!Array.isArray(ids) || !estado) {
+    return res.status(400).json({ error: 'Faltan parámetros: ids (array) y estado' });
+  }
+
+  const placeholders = ids.map(() => '?').join(',');
+  const sql = `UPDATE ll_grilla SET estado = ? WHERE id IN (${placeholders})`;
+
+  try {
+    await pool.query(sql, [estado, ...ids]);
+    console.log(`📌 ${ids.length} celdas actualizadas a estado "${estado}"`);
+    res.json({ actualizadas: ids.length });
+  } catch (err) {
+    console.error('Error al actualizar múltiples celdas:', err);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
 
 module.exports = router;
