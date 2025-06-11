@@ -2,71 +2,122 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>Grilla interactiva</title>
+  <title>Grilla interactiva avanzada</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <style>
     #map { height: 90vh; width: 100%; }
-    button { margin: 10px; padding: 10px; }
+    #panel {
+      margin: 10px;
+    }
+    select, button {
+      padding: 5px 10px;
+      margin-right: 10px;
+    }
   </style>
 </head>
 <body>
-  <button onclick="guardarSeleccion()">Guardar selección</button>
+  <div id="panel">
+    <label for="estadoSelector">Estado actual:</label>
+    <select id="estadoSelector">
+      <option value="seleccionado">Seleccionado (rojo)</option>
+      <option value="pendiente">Pendiente (azul)</option>
+      <option value="revisar">Revisar (naranja)</option>
+      <option value="descartado">Descartado (gris oscuro)</option>
+    </select>
+    <button onclick="guardarSeleccion()">Guardar estados</button>
+  </div>
   <div id="map"></div>
 
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script>
     const OFFSET = 0.009;
-    const ZONA = 'conurbano_sur_v1_extendida';
-    const seleccionadas = new Set();
+    const estadosPorCelda = {}; // { id: estado }
+    const yaBuscadas = new Set();
+
+    const coloresPorEstado = {
+      pendiente: 'blue',
+      seleccionado: 'red',
+      revisar: 'orange',
+      descartado: '#333',
+      buscado: '#ccc' // celdas bloqueadas
+    };
+
+    const params = new URLSearchParams(window.location.search);
+    const zona = params.get('zona');
+    const rubro_id = params.get('rubro_id');
+    const keyword = params.get('keyword');
+
+    if (!zona || (!rubro_id && !keyword)) {
+      alert('Faltan parámetros: zona y rubro_id o keyword');
+      throw new Error('Parámetros incompletos');
+    }
 
     const map = L.map('map').setView([-34.8, -58.4], 10);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
 
-    fetch(`/api/grillas/zona/${ZONA}`)
+    const buscadasURL = new URL('/api/grillas/buscadas', window.location.origin);
+    buscadasURL.searchParams.set('zona', zona);
+    if (rubro_id) buscadasURL.searchParams.set('rubro_id', rubro_id);
+    if (keyword) buscadasURL.searchParams.set('keyword', keyword);
+
+    fetch(buscadasURL.href)
       .then(res => res.json())
-      .then(data => {
-        data.forEach(celda => {
-          const lat = parseFloat(celda.latitud);
-          const lng = parseFloat(celda.longitud);
-          const bounds = [
-            [lat - OFFSET / 2, lng - OFFSET / 2],
-            [lat + OFFSET / 2, lng + OFFSET / 2]
-          ];
-
-          const color = celda.estado === 'seleccionado' ? 'red' : 'blue';
-
-          const rect = L.rectangle(bounds, {
-            color,
-            weight: 1,
-            fillOpacity: 0.3
-          }).addTo(map);
-
-          rect.on('click', () => {
-            if (seleccionadas.has(celda.id)) {
-              seleccionadas.delete(celda.id);
-              rect.setStyle({ color: 'blue' });
-            } else {
-              seleccionadas.add(celda.id);
-              rect.setStyle({ color: 'red' });
-            }
-          });
-        });
+      .then(ids => {
+        ids.forEach(id => yaBuscadas.add(id));
+        cargarGrilla();
       });
 
+    function cargarGrilla() {
+      fetch(`/api/grillas/zona/${zona}`)
+        .then(res => res.json())
+        .then(data => {
+          data.forEach(celda => {
+            const lat = parseFloat(celda.latitud);
+            const lng = parseFloat(celda.longitud);
+            const bounds = [
+              [lat - OFFSET / 2, lng - OFFSET / 2],
+              [lat + OFFSET / 2, lng + OFFSET / 2]
+            ];
+
+            let estadoInicial = celda.estado || 'pendiente';
+            if (yaBuscadas.has(celda.id)) estadoInicial = 'buscado';
+
+            const rect = L.rectangle(bounds, {
+              color: coloresPorEstado[estadoInicial] || 'blue',
+              weight: 1,
+              fillOpacity: 0.3
+            }).addTo(map);
+
+            rect.bindPopup(`Celda: ${celda.codigo}`);
+
+            if (estadoInicial === 'buscado') return; // deshabilitar clic
+
+            estadosPorCelda[celda.id] = estadoInicial;
+
+            rect.on('click', () => {
+              const nuevoEstado = document.getElementById('estadoSelector').value;
+              estadosPorCelda[celda.id] = nuevoEstado;
+              rect.setStyle({ color: coloresPorEstado[nuevoEstado] });
+            });
+          });
+        });
+    }
+
     function guardarSeleccion() {
-      fetch('/api/grillas/seleccionar-multiples', {
+      const celdas = Object.entries(estadosPorCelda).map(([id, estado]) => ({
+        id: parseInt(id), estado
+      }));
+
+      fetch('/api/grillas/actualizar-estados', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ids: Array.from(seleccionadas),
-          estado: 'seleccionado'
-        })
+        body: JSON.stringify({ celdas })
       })
       .then(res => res.json())
-      .then(data => alert(`✅ ${data.actualizadas} celdas guardadas como 'seleccionadas'.`))
-      .catch(err => alert('Error al guardar la selección'));
+      .then(data => alert(`✅ ${data.actualizadas} celdas actualizadas.`))
+      .catch(err => alert('❌ Error al guardar estados.'));
     }
   </script>
 </body>

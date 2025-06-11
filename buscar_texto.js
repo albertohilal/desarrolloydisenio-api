@@ -2,18 +2,15 @@ require('dotenv').config();
 const axios = require('axios');
 const db = require('./db');
 
-// Asegura que no se pase undefined
 function safe(value) {
   return typeof value !== 'undefined' ? value : null;
 }
 
-// Trae zonas activas con busqueda = 1
 async function obtenerZonas() {
   const [rows] = await db.execute("SELECT id, nombre, latitud, longitud FROM ll_zonas WHERE activo = 1 AND busqueda = 1");
   return rows;
 }
 
-// Place Details API
 async function obtenerDetalles(placeId) {
   try {
     const fields = [
@@ -29,7 +26,6 @@ async function obtenerDetalles(placeId) {
   }
 }
 
-// Guardar en la DB
 async function guardarLugar(detalles, zona_id, keyword) {
   try {
     await db.execute(`
@@ -59,7 +55,7 @@ async function guardarLugar(detalles, zona_id, keyword) {
       safe(detalles.website),
       safe(detalles.geometry?.location?.lat),
       safe(detalles.geometry?.location?.lng),
-      null, // rubro_id es null en búsqueda libre
+      null,
       zona_id,
       safe(detalles.rating),
       safe(detalles.user_ratings_total),
@@ -73,8 +69,27 @@ async function guardarLugar(detalles, zona_id, keyword) {
   }
 }
 
-// Ejecuta búsqueda por texto
+async function registrarBusqueda(grilla_id, keyword) {
+  await db.execute(`
+    INSERT IGNORE INTO ll_busquedas_realizadas (grilla_id, tipo, keyword)
+    VALUES (?, 'texto', ?)`, [grilla_id, keyword]);
+}
+
+async function yaFueBuscado(grilla_id, keyword) {
+  const [rows] = await db.execute(`
+    SELECT 1 FROM ll_busquedas_realizadas
+    WHERE grilla_id = ? AND tipo = 'texto' AND keyword = ?`, [grilla_id, keyword]);
+  return rows.length > 0;
+}
+
 async function buscarPorTexto(query, zona, maxPaginas = 3) {
+  const grilla_id = zona.id;
+  const yaExiste = await yaFueBuscado(grilla_id, query);
+  if (yaExiste) {
+    console.log(`⏭️ Ya buscado: "${query}" en zona ${zona.nombre}`);
+    return;
+  }
+
   let pagina = 1;
   let nextPageToken = null;
 
@@ -87,10 +102,7 @@ async function buscarPorTexto(query, zona, maxPaginas = 3) {
 
     for (const lugar of resultados) {
       const detalles = await obtenerDetalles(lugar.place_id);
-      if (!detalles.place_id) {
-        console.warn('⚠️ Sin place_id, se omite.');
-        continue;
-      }
+      if (!detalles.place_id) continue;
       await guardarLugar(detalles, zona.id, query);
     }
 
@@ -102,12 +114,13 @@ async function buscarPorTexto(query, zona, maxPaginas = 3) {
       nextPageToken = null;
     }
   } while (nextPageToken);
+
+  await registrarBusqueda(grilla_id, query);
 }
 
-// Ejecuta búsqueda global por frase
 async function main() {
   const zonas = await obtenerZonas();
-  const frase = process.argv[2]; // frase por línea de comando
+  const frase = process.argv[2];
 
   if (!frase) {
     console.error('❌ Ingresá una frase para buscar: node buscar_texto.js "clínica dental"');

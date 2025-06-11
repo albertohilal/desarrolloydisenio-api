@@ -84,6 +84,19 @@ async function guardarLugar(detalles, rubro_id, zona_id) {
   }
 }
 
+async function registrarBusqueda(grilla_id, rubro_id) {
+  await db.execute(`
+    INSERT IGNORE INTO ll_busquedas_realizadas (grilla_id, tipo, rubro_id)
+    VALUES (?, 'rubro', ?)`, [grilla_id, rubro_id]);
+}
+
+async function yaFueBuscado(grilla_id, rubro_id) {
+  const [rows] = await db.execute(`
+    SELECT 1 FROM ll_busquedas_realizadas
+    WHERE grilla_id = ? AND tipo = 'rubro' AND rubro_id = ?`, [grilla_id, rubro_id]);
+  return rows.length > 0;
+}
+
 async function buscarPorRubro(query, rubro_id, zona, maxPaginas = 3) {
   let pagina = 1;
   let nextPageToken = null;
@@ -97,10 +110,7 @@ async function buscarPorRubro(query, rubro_id, zona, maxPaginas = 3) {
 
     for (const lugar of lugares) {
       const detalles = await obtenerDetalles(lugar.place_id);
-      if (!detalles.place_id) {
-        console.warn("⚠️ Lugar sin place_id, omitido.");
-        continue;
-      }
+      if (!detalles.place_id) continue;
       await guardarLugar(detalles, rubro_id, zona.id);
     }
 
@@ -122,7 +132,14 @@ async function main() {
     if (!rubro.keyword_google) continue;
 
     for (const zona of zonas) {
+      const grilla_id = zona.id; // asumimos 1 zona = 1 grilla en este contexto
+      const yaExiste = await yaFueBuscado(grilla_id, rubro.id);
+      if (yaExiste) {
+        console.log(`⏭️ Ya buscado: Rubro ${rubro.id} en zona ${zona.nombre}`);
+        continue;
+      }
       await buscarPorRubro(rubro.keyword_google, rubro.id, zona);
+      await registrarBusqueda(grilla_id, rubro.id);
     }
   }
 
