@@ -4,7 +4,7 @@ const mysql = require('mysql2/promise');
 // Configuración de la grilla
 const grillaNombre = 'conurbano_sur_v1_extendida';
 const zona = 'AMBA extendido';
-const descripcion = 'Grilla amplia para selección interactiva sobre Conurbano y alrededores';
+const descripcion = 'Grilla con punto medio para búsquedas en Google Places';
 
 // Coordenada de inicio (esquina noroeste)
 const latInicio = -34.400000;
@@ -33,10 +33,13 @@ const BATCH_SIZE = 500;
 
   for (let fila = 0; fila < filas; fila++) {
     for (let columna = 0; columna < columnas; columna++) {
-      const lat = latInicio - fila * tamañoCelda;
-      const lng = lngInicio + columna * tamañoCelda;
       const codigo = `F${fila}_C${columna}`;
-      valores.push([grillaNombre, codigo, fila, columna, lat, lng, 'pendiente']);
+      const latCentro = latInicio - (fila * tamañoCelda) - tamañoCelda / 2;
+      const lngCentro = lngInicio + (columna * tamañoCelda) + tamañoCelda / 2;
+
+      valores.push([
+        grillaNombre, codigo, fila, columna, latCentro, lngCentro, 'pendiente'
+      ]);
     }
   }
 
@@ -52,12 +55,12 @@ const BATCH_SIZE = 500;
     );
   }
 
-  // Registrar metadatos
-  await connection.execute(
-    `INSERT IGNORE INTO ll_grillas (nombre, zona, descripcion, activo)
-     VALUES (?, ?, ?, 1)`,
-    [grillaNombre, zona, descripcion]
-  );
+  // Registrar metadatos en ll_grillas
+  await connection.execute(`
+    INSERT INTO ll_grillas (nombre, zona, descripcion, activo, created_at)
+    VALUES (?, ?, ?, 1, NOW())
+    ON DUPLICATE KEY UPDATE zona = VALUES(zona), descripcion = VALUES(descripcion), activo = 1
+  `, [grillaNombre, zona, descripcion]);
 
   console.log(`✅ Grilla "${grillaNombre}" generada con éxito (${valores.length} celdas)`);
   await connection.end();

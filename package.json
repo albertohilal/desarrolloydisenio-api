@@ -16,8 +16,9 @@
     "dayjs": "^1.11.13",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
+    "geolib": "^3.3.4",
     "json2csv": "^6.0.0-alpha.2",
-    "mysql2": "^3.14.0",
+    "mysql2": "^3.14.1",
     "node-fetch": "^2.7.0",
     "papaparse": "^5.5.2"
   },

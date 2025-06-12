@@ -1,124 +1,190 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <title>Grilla interactiva avanzada</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <meta charset="UTF-8" />
+  <title>Mapa de Grilla</title>
   <style>
-    #map { height: 90vh; width: 100%; }
-    #panel {
-      margin: 10px;
+    body {
+      font-family: sans-serif;
+      text-align: center;
     }
+
+    #mapa {
+      position: relative;
+      width: 1000px;
+      height: 1000px;
+      border: 2px solid #000;
+      margin: 20px auto;
+    }
+
+    .celda {
+      width: 20px;
+      height: 20px;
+      position: absolute;
+      background-color: #44f;
+      border: 1px solid #000;
+      cursor: pointer;
+    }
+
+    .seleccionada {
+      background-color: #0f0 !important;
+    }
+
+    .ya-buscada {
+      background-color: #ccc !important;
+      cursor: not-allowed;
+    }
+
     select, button {
-      padding: 5px 10px;
-      margin-right: 10px;
+      margin-top: 10px;
+      font-size: 16px;
+      margin-left: 5px;
+    }
+
+    #contadorBusquedas, #contadorSeleccionadas {
+      margin-top: 8px;
+      font-weight: bold;
     }
   </style>
 </head>
 <body>
-  <div id="panel">
-    <label for="estadoSelector">Estado actual:</label>
-    <select id="estadoSelector">
-      <option value="seleccionado">Seleccionado (rojo)</option>
-      <option value="pendiente">Pendiente (azul)</option>
-      <option value="revisar">Revisar (naranja)</option>
-      <option value="descartado">Descartado (gris oscuro)</option>
-    </select>
-    <button onclick="guardarSeleccion()">Guardar estados</button>
-  </div>
-  <div id="map"></div>
+  <h1>Mapa de Grilla</h1>
 
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <label for="keyword">Seleccionar rubro:</label>
+  <select id="keyword"></select>
+  <button id="botonBuscar">Buscar en seleccionadas</button>
+  <button id="botonLimpiar">🧹 Limpiar selección</button>
+
+  <p id="contadorBusquedas"></p>
+  <p id="contadorSeleccionadas"></p>
+
+  <div id="mapa"></div>
+
   <script>
-    const OFFSET = 0.009;
-    const estadosPorCelda = {}; // { id: estado }
-    const yaBuscadas = new Set();
-
-    const coloresPorEstado = {
-      pendiente: 'blue',
-      seleccionado: 'red',
-      revisar: 'orange',
-      descartado: '#333',
-      buscado: '#ccc' // celdas bloqueadas
-    };
-
-    const params = new URLSearchParams(window.location.search);
-    const zona = params.get('zona');
-    const rubro_id = params.get('rubro_id');
-    const keyword = params.get('keyword');
-
-    if (!zona || (!rubro_id && !keyword)) {
-      alert('Faltan parámetros: zona y rubro_id o keyword');
-      throw new Error('Parámetros incompletos');
+    const grilla = [];
+    for (let y = 0; y < 1000; y += 25) {
+      for (let x = 0; x < 1000; x += 25) {
+        grilla.push({ id: `x${x}_y${y}`, x, y });
+      }
     }
 
-    const map = L.map('map').setView([-34.8, -58.4], 10);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(map);
+    function actualizarContadorSeleccionadas() {
+      const cantidad = document.querySelectorAll(".celda.seleccionada").length;
+      document.getElementById("contadorSeleccionadas").textContent =
+        `🟢 Celdas seleccionadas: ${cantidad}`;
+    }
 
-    const buscadasURL = new URL('/api/grillas/buscadas', window.location.origin);
-    buscadasURL.searchParams.set('zona', zona);
-    if (rubro_id) buscadasURL.searchParams.set('rubro_id', rubro_id);
-    if (keyword) buscadasURL.searchParams.set('keyword', keyword);
+    function pintarGrillaEnMapa(grilla, celdasYaBuscadas = []) {
+      const mapa = document.getElementById("mapa");
+      mapa.innerHTML = "";
 
-    fetch(buscadasURL.href)
-      .then(res => res.json())
-      .then(ids => {
-        ids.forEach(id => yaBuscadas.add(id));
-        cargarGrilla();
+      grilla.forEach((celda) => {
+        const div = document.createElement("div");
+        div.className = "celda";
+        div.style.left = `${celda.x}px`;
+        div.style.top = `${celda.y}px`;
+        div.dataset.id = celda.id;
+
+        if (celdasYaBuscadas.includes(celda.id)) {
+          div.classList.add("ya-buscada");
+          div.title = "Ya fue buscada para esta keyword";
+        }
+
+        div.addEventListener("click", () => {
+          if (div.classList.contains("ya-buscada")) return;
+          div.classList.toggle("seleccionada");
+          actualizarContadorSeleccionadas();
+        });
+
+        mapa.appendChild(div);
       });
 
-    function cargarGrilla() {
-      fetch(`/api/grillas/zona/${zona}`)
-        .then(res => res.json())
-        .then(data => {
-          data.forEach(celda => {
-            const lat = parseFloat(celda.latitud);
-            const lng = parseFloat(celda.longitud);
-            const bounds = [
-              [lat - OFFSET / 2, lng - OFFSET / 2],
-              [lat + OFFSET / 2, lng + OFFSET / 2]
-            ];
-
-            let estadoInicial = celda.estado || 'pendiente';
-            if (yaBuscadas.has(celda.id)) estadoInicial = 'buscado';
-
-            const rect = L.rectangle(bounds, {
-              color: coloresPorEstado[estadoInicial] || 'blue',
-              weight: 1,
-              fillOpacity: 0.3
-            }).addTo(map);
-
-            rect.bindPopup(`Celda: ${celda.codigo}`);
-
-            if (estadoInicial === 'buscado') return; // deshabilitar clic
-
-            estadosPorCelda[celda.id] = estadoInicial;
-
-            rect.on('click', () => {
-              const nuevoEstado = document.getElementById('estadoSelector').value;
-              estadosPorCelda[celda.id] = nuevoEstado;
-              rect.setStyle({ color: coloresPorEstado[nuevoEstado] });
-            });
-          });
-        });
+      actualizarContadorSeleccionadas();
     }
 
-    function guardarSeleccion() {
-      const celdas = Object.entries(estadosPorCelda).map(([id, estado]) => ({
-        id: parseInt(id), estado
-      }));
+    async function cargarMapaParaKeyword(keyword) {
+      try {
+        const res = await fetch(`http://localhost:3001/api/celdas-ya-buscadas?keyword=${encodeURIComponent(keyword)}`);
+        const celdasYaBuscadas = await res.json();
 
-      fetch('/api/grillas/actualizar-estados', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ celdas })
+        pintarGrillaEnMapa(grilla, celdasYaBuscadas);
+
+        const contador = document.getElementById("contadorBusquedas");
+        contador.textContent = `🔍 Celdas ya buscadas: ${celdasYaBuscadas.length}`;
+      } catch (error) {
+        console.error("Error al cargar celdas ya buscadas:", error);
+        pintarGrillaEnMapa(grilla, []);
+        document.getElementById("contadorBusquedas").textContent = "";
+      }
+    }
+
+    async function cargarRubrosActivos() {
+      try {
+        const res = await fetch("http://localhost:3001/api/rubros-activos");
+        const rubros = await res.json();
+        const selector = document.getElementById("keyword");
+
+        selector.innerHTML = "";
+
+        rubros.forEach(({ keyword_google, nombre }) => {
+          const option = document.createElement("option");
+          option.value = keyword_google;
+          option.textContent = nombre;
+          selector.appendChild(option);
+        });
+
+        if (rubros.length > 0) {
+          cargarMapaParaKeyword(rubros[0].keyword_google);
+
+          selector.addEventListener("change", () => {
+            cargarMapaParaKeyword(selector.value);
+          });
+        }
+      } catch (err) {
+        console.error("Error al cargar rubros activos:", err);
+      }
+    }
+
+    document.getElementById("botonBuscar").addEventListener("click", () => {
+      const keyword = document.getElementById("keyword").value;
+      const seleccionadas = Array.from(document.querySelectorAll(".celda.seleccionada"))
+        .map(div => {
+          const [xStr, yStr] = div.dataset.id.split("_");
+          return {
+            x: parseInt(xStr.replace("x", "")),
+            y: parseInt(yStr.replace("y", ""))
+          };
+        });
+
+      if (seleccionadas.length === 0) {
+        alert("No seleccionaste ninguna celda.");
+        return;
+      }
+
+      fetch("http://localhost:3001/api/buscar-en-celdas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ keyword, celdas: seleccionadas })
       })
       .then(res => res.json())
-      .then(data => alert(`✅ ${data.actualizadas} celdas actualizadas.`))
-      .catch(err => alert('❌ Error al guardar estados.'));
-    }
+      .then(data => {
+        alert("✅ Búsqueda ejecutada.");
+        cargarMapaParaKeyword(keyword);
+      })
+      .catch(err => {
+        console.error("Error en búsqueda:", err);
+        alert("❌ Error al ejecutar búsqueda.");
+      });
+    });
+
+    // 🧹 Botón limpiar selección manual
+    document.getElementById("botonLimpiar").addEventListener("click", () => {
+      const seleccionadas = document.querySelectorAll(".celda.seleccionada");
+      seleccionadas.forEach(celda => celda.classList.remove("seleccionada"));
+      actualizarContadorSeleccionadas();
+    });
+
+    cargarRubrosActivos();
   </script>
 </body>
 </html>

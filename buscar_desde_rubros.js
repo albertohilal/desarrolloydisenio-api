@@ -1,149 +1,49 @@
-require('dotenv').config();
-const axios = require('axios');
 const db = require('./db');
+const axios = require('axios');
 
-function safe(value) {
-  return typeof value !== 'undefined' ? value : null;
-}
-
-async function obtenerRubros() {
-  const [rows] = await db.execute(`
-    SELECT id, keyword_google
-    FROM ll_rubros
-    WHERE busqueda = 1
-  `);
-  return rows;
-}
-
-async function obtenerZonas() {
-  const [rows] = await db.execute(`
-    SELECT id, nombre, latitud, longitud
-    FROM ll_zonas
-    WHERE activo = 1 AND busqueda = 1
-  `);
-  return rows;
-}
-
-async function obtenerDetalles(placeId) {
-  try {
-    const fields = [
-      "place_id", "name", "formatted_address", "vicinity", "formatted_phone_number", "website",
-      "opening_hours", "geometry", "rating", "user_ratings_total", "price_level", "types"
-    ].join(',');
-
-    const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=${fields}&key=${process.env.GOOGLE_API_KEY}`;
-    const response = await axios.get(url);
-    return response.data.result || {};
-  } catch (err) {
-    console.error(`❌ Error en Place Details:`, err.message);
-    return {};
-  }
-}
-
-async function guardarLugar(detalles, rubro_id, zona_id) {
-  try {
-    await db.execute(`
-      INSERT INTO ll_lugares (
-        place_id, nombre, direccion, telefono, sitio_web,
-        latitud, longitud, rubro_id, zona_id,
-        rating, reviews, tipos, precio, abierto
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON DUPLICATE KEY UPDATE
-        nombre = VALUES(nombre),
-        direccion = VALUES(direccion),
-        telefono = VALUES(telefono),
-        sitio_web = VALUES(sitio_web),
-        latitud = VALUES(latitud),
-        longitud = VALUES(longitud),
-        rubro_id = VALUES(rubro_id),
-        zona_id = VALUES(zona_id),
-        rating = VALUES(rating),
-        reviews = VALUES(reviews),
-        tipos = VALUES(tipos),
-        precio = VALUES(precio),
-        abierto = VALUES(abierto)
-    `, [
-      safe(detalles.place_id),
-      safe(detalles.name),
-      safe(detalles.formatted_address),
-      safe(detalles.formatted_phone_number),
-      safe(detalles.website),
-      safe(detalles.geometry?.location?.lat),
-      safe(detalles.geometry?.location?.lng),
-      safe(rubro_id),
-      safe(zona_id),
-      safe(detalles.rating),
-      safe(detalles.user_ratings_total),
-      safe(detalles.types ? detalles.types.join(', ') : ''),
-      safe(detalles.price_level),
-      safe(detalles.opening_hours?.open_now ? 1 : 0)
-    ]);
-    console.log(`✔️ Guardado: ${detalles.name}`);
-  } catch (err) {
-    console.error(`❌ Error al guardar lugar:`, err.message);
-  }
-}
-
-async function registrarBusqueda(grilla_id, rubro_id) {
-  await db.execute(`
-    INSERT IGNORE INTO ll_busquedas_realizadas (grilla_id, tipo, rubro_id)
-    VALUES (?, 'rubro', ?)`, [grilla_id, rubro_id]);
-}
-
-async function yaFueBuscado(grilla_id, rubro_id) {
-  const [rows] = await db.execute(`
-    SELECT 1 FROM ll_busquedas_realizadas
-    WHERE grilla_id = ? AND tipo = 'rubro' AND rubro_id = ?`, [grilla_id, rubro_id]);
+/**
+ * Verifica si una celda ya fue buscada para la keyword dada.
+ */
+async function fueBuscada(celda, keyword) {
+  const celda_id = `x${celda.x}_y${celda.y}`;
+  const [rows] = await db.execute(
+    "SELECT 1 FROM iunaorg_dyd.ll_busquedas WHERE celda_id = ? AND keyword_google = ?",
+    [celda_id, keyword]
+  );
   return rows.length > 0;
 }
 
-async function buscarPorRubro(query, rubro_id, zona, maxPaginas = 3) {
-  let pagina = 1;
-  let nextPageToken = null;
-
-  do {
-    const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query)}&location=${zona.latitud},${zona.longitud}&radius=1000&key=${process.env.GOOGLE_API_KEY}${nextPageToken ? `&pagetoken=${nextPageToken}` : ''}`;
-    const response = await axios.get(url);
-    const lugares = response.data.results;
-
-    console.log(`🔎 "${query}" | Zona: ${zona.nombre} | Página ${pagina}`);
-
-    for (const lugar of lugares) {
-      const detalles = await obtenerDetalles(lugar.place_id);
-      if (!detalles.place_id) continue;
-      await guardarLugar(detalles, rubro_id, zona.id);
-    }
-
-    nextPageToken = response.data.next_page_token;
-    if (nextPageToken && pagina < maxPaginas) {
-      pagina++;
-      await new Promise(r => setTimeout(r, 2000));
-    } else {
-      nextPageToken = null;
-    }
-  } while (nextPageToken);
+/**
+ * Registra una nueva búsqueda de la keyword en la celda.
+ */
+async function registrarBusqueda(celda, keyword) {
+  const celda_id = `x${celda.x}_y${celda.y}`;
+  await db.execute(
+    "INSERT INTO iunaorg_dyd.ll_busquedas (celda_id, keyword_google) VALUES (?, ?)",
+    [celda_id, keyword]
+  );
 }
 
-async function main() {
-  const rubros = await obtenerRubros();
-  const zonas = await obtenerZonas();
+/**
+ * Función principal para realizar búsquedas desde rubros (keyword).
+ */
+async function buscarDesdeRubros(celdas, keyword) {
+  for (const celda of celdas) {
+    const celda_id = `x${celda.x}_y${celda.y}`;
 
-  for (const rubro of rubros) {
-    if (!rubro.keyword_google) continue;
-
-    for (const zona of zonas) {
-      const grilla_id = zona.id; // asumimos 1 zona = 1 grilla en este contexto
-      const yaExiste = await yaFueBuscado(grilla_id, rubro.id);
-      if (yaExiste) {
-        console.log(`⏭️ Ya buscado: Rubro ${rubro.id} en zona ${zona.nombre}`);
-        continue;
-      }
-      await buscarPorRubro(rubro.keyword_google, rubro.id, zona);
-      await registrarBusqueda(grilla_id, rubro.id);
+    if (await fueBuscada(celda, keyword)) {
+      console.log(`⚠️ Ya buscada: ${celda_id} (${keyword})`);
+      continue;
     }
+
+    console.log(`🔍 Buscando ${keyword} en celda ${celda_id}`);
+
+    // Aquí iría tu llamada a la API de Google Places:
+    // const resultados = await buscarEnGooglePlaces(celda, keyword);
+    // await guardarLugaresEnDB(resultados);
+
+    await registrarBusqueda(celda, keyword);
   }
-
-  console.log('✅ Finalizado');
 }
 
-main();
+module.exports = { buscarDesdeRubros };

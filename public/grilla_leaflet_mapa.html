@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Mapa con Grilla de Lomas de Zamora</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <style>
+    #map {
+      width: 100%;
+      height: 100vh;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script>
+    const grillaNombre = 'conurbano_sur_v1_extendida';
+
+    const map = L.map('map').setView([-34.75, -58.4], 11);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 18,
+    }).addTo(map);
+
+    fetch(`http://localhost:3000/api/grilla/${grillaNombre}`)
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`Error ${response.status}`);
+        }
+        return response.json();
+      })
+      .then(data => {
+        data.forEach(celda => {
+          const bounds = [
+            [celda.lat1, celda.lng1],
+            [celda.lat2, celda.lng2],
+          ];
+          const rectangle = L.rectangle(bounds, {
+            color: '#007bff',
+            weight: 1,
+            fillOpacity: 0.2
+          }).addTo(map);
+          rectangle.bindPopup(celda.codigo);
+        });
+      })
+      .catch(err => {
+        console.error("Error cargando grilla:", err);
+        alert("No se pudo cargar la grilla desde el servidor.");
+      });
+  </script>
+</body>
+</html>
