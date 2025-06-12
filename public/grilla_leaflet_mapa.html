@@ -2,52 +2,181 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <title>Mapa con Grilla de Lomas de Zamora</title>
+  <title>Mapa con Grilla Avanzada</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <style>
     #map {
       width: 100%;
-      height: 100vh;
+      height: 90vh;
+    }
+    .panel {
+      text-align: center;
+      margin-bottom: 10px;
+    }
+    select, input, button {
+      font-size: 16px;
+      margin: 5px;
+    }
+    #contadorSeleccionadas, #contadorBusquedas {
+      font-weight: bold;
     }
   </style>
 </head>
 <body>
+  <div class="panel">
+    <label for="keywordDropdown">Seleccionar rubro:</label>
+    <select id="keywordDropdown"></select>
+    <button id="buscarPorRubro">🔍 Buscar por rubro</button><br>
+
+    <input type="text" id="keywordTexto" placeholder="Buscar por texto libre">
+    <button id="buscarPorTexto">🔍 Buscar por texto</button><br>
+
+    <button id="botonLimpiar">🧹 Limpiar selección</button><br>
+    <span id="contadorSeleccionadas"></span> · <span id="contadorBusquedas"></span>
+  </div>
+
   <div id="map"></div>
 
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script>
     const grillaNombre = 'conurbano_sur_v1_extendida';
+    const colores = {
+      pendiente: '#ffc107',
+      seleccionado: '#28a745',
+      revisar: '#17a2b8',
+      descartado: '#dc3545',
+      buscada: '#6c757d'
+    };
 
     const map = L.map('map').setView([-34.75, -58.4], 11);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 18,
     }).addTo(map);
 
-    fetch(`http://localhost:3000/api/grilla/${grillaNombre}`)
-      .then(response => {
-        if (!response.ok) {
-          throw new Error(`Error ${response.status}`);
-        }
-        return response.json();
-      })
-      .then(data => {
-        data.forEach(celda => {
-          const bounds = [
-            [celda.lat1, celda.lng1],
-            [celda.lat2, celda.lng2],
-          ];
-          const rectangle = L.rectangle(bounds, {
-            color: '#007bff',
-            weight: 1,
-            fillOpacity: 0.2
-          }).addTo(map);
-          rectangle.bindPopup(celda.codigo);
-        });
-      })
-      .catch(err => {
-        console.error("Error cargando grilla:", err);
-        alert("No se pudo cargar la grilla desde el servidor.");
+    const rectangulos = new Map();
+    let rubros = [];
+
+    async function cargarRubros() {
+      const res = await fetch('http://localhost:3000/api/rubros-activos');
+      rubros = await res.json();
+      const selector = document.getElementById('keywordDropdown');
+      selector.innerHTML = '';
+      rubros.forEach(r => {
+        const option = document.createElement('option');
+        option.value = r.keyword_google;
+        option.textContent = r.nombre_es || r.keyword_google;
+        selector.appendChild(option);
       });
+      if (rubros.length > 0) {
+        cargarGrilla(rubros[0].keyword_google);
+        selector.addEventListener('change', () => {
+          cargarGrilla(selector.value);
+        });
+      }
+    }
+
+    async function cargarGrilla(keyword) {
+      const res1 = await fetch(`http://localhost:3000/api/grilla/${grillaNombre}`);
+      const celdas = await res1.json();
+      const res2 = await fetch(`http://localhost:3000/api/celdas-ya-buscadas?keyword=${encodeURIComponent(keyword)}`);
+      const yaBuscadas = await res2.json();
+
+      rectangulos.clear();
+      map.eachLayer(layer => {
+        if (layer instanceof L.Rectangle) map.removeLayer(layer);
+      });
+
+      let contadorYaBuscadas = 0;
+      celdas.forEach(celda => {
+        const bounds = [[celda.lat1, celda.lng1], [celda.lat2, celda.lng2]];
+        let estado = celda.estado;
+        if (yaBuscadas.includes(celda.codigo)) {
+          estado = 'buscada';
+          contadorYaBuscadas++;
+        }
+        const color = colores[estado] || '#007bff';
+        const rect = L.rectangle(bounds, {
+          color, fillColor: color, weight: 1, fillOpacity: 0.3
+        }).addTo(map);
+        rect.estado = estado;
+        rect.codigo = celda.codigo;
+        rect.id = celda.id;
+        rect.seleccionado = false;
+        rect.on('click', () => {
+          if (rect.estado === 'buscada') return;
+          rect.seleccionado = !rect.seleccionado;
+          rect.setStyle({
+            color: rect.seleccionado ? '#28a745' : colores[rect.estado],
+            fillColor: rect.seleccionado ? '#28a745' : colores[rect.estado]
+          });
+          actualizarContadorSeleccionadas();
+        });
+        rectangulos.set(celda.codigo, rect);
+      });
+      document.getElementById('contadorBusquedas').textContent = `🔍 Ya buscadas: ${contadorYaBuscadas}`;
+      actualizarContadorSeleccionadas();
+    }
+
+    function actualizarContadorSeleccionadas() {
+      const seleccionadas = Array.from(rectangulos.values()).filter(r => r.seleccionado);
+      document.getElementById('contadorSeleccionadas').textContent =
+        `🟢 Seleccionadas: ${seleccionadas.length}`;
+    }
+
+    document.getElementById('botonLimpiar').addEventListener('click', () => {
+      rectangulos.forEach(rect => {
+        if (rect.estado !== 'buscada') {
+          rect.seleccionado = false;
+          rect.setStyle({
+            color: colores[rect.estado],
+            fillColor: colores[rect.estado]
+          });
+        }
+      });
+      actualizarContadorSeleccionadas();
+    });
+
+    function obtenerCeldasSeleccionadas() {
+      return Array.from(rectangulos.values())
+        .filter(r => r.seleccionado)
+        .map(r => ({ id: r.id, codigo: r.codigo }));
+    }
+
+    document.getElementById('buscarPorRubro').addEventListener('click', async () => {
+      const keyword = document.getElementById('keywordDropdown').value;
+      const celdas = obtenerCeldasSeleccionadas();
+      if (celdas.length === 0) return alert("⚠️ No seleccionaste celdas.");
+      const res = await fetch('http://localhost:3000/api/buscar-en-celdas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ keyword, modo: 'rubro', celdas })
+      });
+      if (res.ok) {
+        alert("✅ Búsqueda por rubro completada.");
+        cargarGrilla(keyword);
+      } else {
+        alert("❌ Error al buscar.");
+      }
+    });
+
+    document.getElementById('buscarPorTexto').addEventListener('click', async () => {
+      const keyword = document.getElementById('keywordTexto').value.trim();
+      const celdas = obtenerCeldasSeleccionadas();
+      if (!keyword) return alert("⚠️ Escribí algo para buscar.");
+      if (celdas.length === 0) return alert("⚠️ No seleccionaste celdas.");
+      const res = await fetch('http://localhost:3000/api/buscar-en-celdas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ keyword, modo: 'texto', celdas })
+      });
+      if (res.ok) {
+        alert("✅ Búsqueda por texto completada.");
+      } else {
+        alert("❌ Error al buscar por texto.");
+      }
+    });
+
+    cargarRubros();
   </script>
 </body>
 </html>
