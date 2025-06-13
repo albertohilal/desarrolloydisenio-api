@@ -6,143 +6,119 @@
   <style>
     body {
       font-family: Arial, sans-serif;
-      padding: 2rem;
-      max-width: 600px;
-      margin: auto;
+      padding: 20px;
     }
-
     label {
       display: block;
-      margin-top: 1rem;
+      margin-top: 10px;
     }
-
-    input, select, textarea, button {
+    input, select, textarea {
       width: 100%;
-      padding: 0.5rem;
-      margin-top: 0.3rem;
+      padding: 6px;
+      margin-bottom: 10px;
     }
-
+    button {
+      padding: 8px 16px;
+    }
     #resultado {
-      margin-top: 1.5rem;
+      margin-top: 10px;
       font-weight: bold;
-    }
-
-    .selector-con-boton {
-      display: flex;
-      gap: 10px;
-      align-items: center;
-    }
-
-    .selector-con-boton select {
-      flex: 1;
-    }
-
-    .selector-con-boton button {
-      width: 40px;
-      height: 40px;
-      font-size: 18px;
     }
   </style>
 </head>
 <body>
   <h2>Registrar dato adicional (Scrap manual)</h2>
 
-  <label for="selectorLugar">Seleccionar lugar:</label>
-  <div class="selector-con-boton">
-    <select id="selectorLugar">
+  <form id="scrapForm">
+    <label for="lugarSelect">Seleccionar lugar:</label>
+    <select id="lugarSelect">
       <option value="">— Seleccionar —</option>
     </select>
-    <button id="buscarGoogle" type="button" disabled title="Buscar en Google">🔍</button>
-  </div>
+    <button type="button" onclick="buscarEnGoogle()">🔍</button>
 
-  <form id="scrapForm">
     <label for="place_id">Place ID *</label>
-    <input type="text" id="place_id" required />
+    <input type="text" id="place_id" name="place_id" readonly required />
 
     <label for="nombre">Nombre del comercio</label>
-    <input type="text" id="nombre" />
+    <input type="text" id="nombre" name="nombre" readonly />
 
     <label for="direccion">Dirección</label>
-    <input type="text" id="direccion" readonly />
+    <input type="text" id="direccion" name="direccion" readonly />
 
     <label for="tipo_dato">Tipo de dato *</label>
-    <select id="tipo_dato" required>
+    <select id="tipo_dato" name="tipo_dato" required>
+      <option value="">Seleccionar</option>
       <option value="telefono">Teléfono</option>
+      <option value="email">Email</option>
       <option value="sitio_web">Sitio Web</option>
       <option value="instagram">Instagram</option>
-      <option value="facebook">Facebook</option>
-      <option value="whatsapp">WhatsApp</option>
-      <option value="email">Email</option>
-      <option value="otro">Otro</option>
+      <option value="otros">Otros</option>
     </select>
 
     <label for="valor">Valor *</label>
-    <input type="text" id="valor" required />
+    <input type="text" id="valor" name="valor" required />
 
     <label for="fuente">Fuente</label>
-    <select id="fuente">
+    <select id="fuente" name="fuente">
       <option value="manual">Manual</option>
       <option value="scraper">Scraper</option>
-      <option value="ia">IA</option>
-      <option value="api_externa">API Externa</option>
     </select>
 
     <label for="observaciones">Observaciones</label>
-    <textarea id="observaciones"></textarea>
+    <textarea id="observaciones" name="observaciones"></textarea>
 
     <button type="submit">Guardar</button>
+    <div id="resultado"></div>
   </form>
-
-  <div id="resultado"></div>
 
   <script>
     async function cargarLugares() {
-      const res = await fetch('/api/lugares-incompletos');
-      const lugares = await res.json();
-      const selector = document.getElementById('selectorLugar');
-      lugares.forEach(l => {
-        const option = document.createElement('option');
-        option.value = l.place_id;
-        option.textContent = `${l.nombre} (${l.place_id} - ${l.direccion})`;
-        option.dataset.nombre = l.nombre;
-        option.dataset.direccion = l.direccion;
-        selector.appendChild(option);
-      });
+      try {
+        const res = await fetch('/api/lugares-incompletos');
+        const lugares = await res.json();
+        const select = document.getElementById('lugarSelect');
+        select.innerHTML = '<option value="">— Seleccionar —</option>';
+
+        lugares.forEach(lugar => {
+          const option = document.createElement('option');
+          option.value = lugar.place_id;
+          option.textContent = `${lugar.nombre} - ${lugar.direccion}`;
+          option.dataset.nombre = lugar.nombre;
+          option.dataset.direccion = lugar.direccion;
+          select.appendChild(option);
+        });
+      } catch (error) {
+        console.error('Error cargando lugares:', error);
+      }
     }
 
-    const botonBuscar = document.getElementById('buscarGoogle');
+    function buscarEnGoogle() {
+      const select = document.getElementById('lugarSelect');
+      const selectedOption = select.options[select.selectedIndex];
+      if (selectedOption) {
+        const query = selectedOption.textContent;
+        window.open(`https://www.google.com/search?q=${encodeURIComponent(query)}`, '_blank');
+      }
+    }
 
-    document.getElementById('selectorLugar').addEventListener('change', (e) => {
-      const selected = e.target.options[e.target.selectedIndex];
-      document.getElementById('place_id').value = selected.value;
+    document.getElementById('lugarSelect').addEventListener('change', function () {
+      const selected = this.options[this.selectedIndex];
+      document.getElementById('place_id').value = selected.value || '';
       document.getElementById('nombre').value = selected.dataset.nombre || '';
       document.getElementById('direccion').value = selected.dataset.direccion || '';
-      botonBuscar.disabled = !selected.dataset.nombre;
-
-      // ✅ Limpiar mensaje, valor y observaciones
-      document.getElementById('resultado').innerText = '';
-      document.getElementById('valor').value = '';
-      document.getElementById('observaciones').value = '';
-    });
-
-    botonBuscar.addEventListener('click', () => {
-      const nombre = document.getElementById('nombre').value.trim();
-      const direccion = document.getElementById('direccion').value.trim();
-      const query = encodeURIComponent(`${nombre} ${direccion}`);
-      const url = `https://www.google.com/search?q=${query}`;
-      window.open(url, '_blank');
     });
 
     document.getElementById('scrapForm').addEventListener('submit', async function (e) {
       e.preventDefault();
 
       const data = {
-        place_id: document.getElementById('place_id').value.trim(),
-        nombre: document.getElementById('nombre').value.trim(),
+        place_id: document.getElementById('place_id').value,
+        nombre: document.getElementById('nombre').value,
+        direccion: document.getElementById('direccion').value,
         tipo_dato: document.getElementById('tipo_dato').value,
-        valor: document.getElementById('valor').value.trim(),
+        valor: document.getElementById('valor').value,
         fuente: document.getElementById('fuente').value,
-        observaciones: document.getElementById('observaciones').value.trim()
+        observaciones: document.getElementById('observaciones').value
       };
 
       const res = await fetch('/api/guardar-scrap', {
@@ -152,11 +128,17 @@
       });
 
       const result = await res.json();
-      const mensaje = res.ok ? `✅ ${result.mensaje}` : `❌ ${result.mensaje || 'Error inesperado'}`;
+      const mensaje = result.ok ? '✅ Dato guardado correctamente' : '❌ ' + (result.mensaje || 'Error inesperado');
       document.getElementById('resultado').innerText = mensaje;
+
+      // Limpiar campos luego de guardar
+      this.reset();
+      document.getElementById('place_id').value = '';
+      document.getElementById('nombre').value = '';
+      document.getElementById('direccion').value = '';
     });
 
-    cargarLugares();
+    document.addEventListener('DOMContentLoaded', cargarLugares);
   </script>
 </body>
 </html>
