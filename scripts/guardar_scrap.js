@@ -1,43 +1,47 @@
 const mysql = require('mysql2/promise');
 require('dotenv').config();
 
-async function guardarDatoScrap(datos) {
+async function guardarDatoScrap(data) {
+  const {
+    place_id,
+    nombre = null,
+    tipo_dato,
+    valor,
+    fuente = 'manual',
+    observaciones = null
+  } = data;
+
   const connection = await mysql.createConnection({
     host: process.env.DB_HOST,
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
-    database: 'iunaorg_dyd'
+    database: process.env.DB_DATABASE
   });
 
-  const query = `
-    INSERT INTO ll_lugares_scrap 
-    (place_id, nombre, tipo_dato, valor, fuente, observaciones)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `;
-
   try {
+    const query = `
+      INSERT INTO ll_lugares_scrap 
+      (place_id, nombre, tipo_dato, valor, fuente, observaciones, fecha_scrap)
+      VALUES (?, ?, ?, ?, ?, ?, NOW())
+    `;
+
     const [result] = await connection.execute(query, [
-      datos.place_id,
-      datos.nombre || null,
-      datos.tipo_dato,
-      datos.valor,
-      datos.fuente || 'manual',
-      datos.observaciones || null
+      place_id,
+      nombre,
+      tipo_dato,
+      valor,
+      fuente,
+      observaciones
     ]);
-    console.log('Dato insertado con ID:', result.insertId);
+
+    console.log('✅ Dato insertado con ID:', result.insertId);
+    return result;
   } catch (error) {
-    console.error('Error al guardar dato:', error.message);
+    console.error('❌ Error al insertar scrap:', error.message);
+    throw error;
   } finally {
     await connection.end();
   }
 }
 
-// Ejemplo de uso
-guardarDatoScrap({
-  place_id: 'ChIJ0Tz5Pp1KvJURgB2AcojA3_M',
-  nombre: 'Bar El Sur',
-  tipo_dato: 'instagram',
-  valor: 'https://instagram.com/barelsur',
-  fuente: 'manual',
-  observaciones: 'Dato verificado por usuario'
-});
+module.exports = { guardarDatoScrap };

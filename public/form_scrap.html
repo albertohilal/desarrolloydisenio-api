@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Formulario de Scrap Manual</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 2rem;
+      max-width: 600px;
+      margin: auto;
+    }
+
+    label {
+      display: block;
+      margin-top: 1rem;
+    }
+
+    input, select, textarea, button {
+      width: 100%;
+      padding: 0.5rem;
+      margin-top: 0.3rem;
+    }
+
+    #resultado {
+      margin-top: 1.5rem;
+      font-weight: bold;
+    }
+
+    .selector-con-boton {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .selector-con-boton select {
+      flex: 1;
+    }
+
+    .selector-con-boton button {
+      width: 40px;
+      height: 40px;
+      font-size: 18px;
+    }
+  </style>
+</head>
+<body>
+  <h2>Registrar dato adicional (Scrap manual)</h2>
+
+  <label for="selectorLugar">Seleccionar lugar:</label>
+  <div class="selector-con-boton">
+    <select id="selectorLugar">
+      <option value="">— Seleccionar —</option>
+    </select>
+    <button id="buscarGoogle" type="button" disabled title="Buscar en Google">🔍</button>
+  </div>
+
+  <form id="scrapForm">
+    <label for="place_id">Place ID *</label>
+    <input type="text" id="place_id" required />
+
+    <label for="nombre">Nombre del comercio</label>
+    <input type="text" id="nombre" />
+
+    <label for="direccion">Dirección</label>
+    <input type="text" id="direccion" readonly />
+
+    <label for="tipo_dato">Tipo de dato *</label>
+    <select id="tipo_dato" required>
+      <option value="telefono">Teléfono</option>
+      <option value="sitio_web">Sitio Web</option>
+      <option value="instagram">Instagram</option>
+      <option value="facebook">Facebook</option>
+      <option value="whatsapp">WhatsApp</option>
+      <option value="email">Email</option>
+      <option value="otro">Otro</option>
+    </select>
+
+    <label for="valor">Valor *</label>
+    <input type="text" id="valor" required />
+
+    <label for="fuente">Fuente</label>
+    <select id="fuente">
+      <option value="manual">Manual</option>
+      <option value="scraper">Scraper</option>
+      <option value="ia">IA</option>
+      <option value="api_externa">API Externa</option>
+    </select>
+
+    <label for="observaciones">Observaciones</label>
+    <textarea id="observaciones"></textarea>
+
+    <button type="submit">Guardar</button>
+  </form>
+
+  <div id="resultado"></div>
+
+  <script>
+    async function cargarLugares() {
+      const res = await fetch('/api/lugares-incompletos');
+      const lugares = await res.json();
+      const selector = document.getElementById('selectorLugar');
+      lugares.forEach(l => {
+        const option = document.createElement('option');
+        option.value = l.place_id;
+        option.textContent = `${l.nombre} (${l.place_id} - ${l.direccion})`;
+        option.dataset.nombre = l.nombre;
+        option.dataset.direccion = l.direccion;
+        selector.appendChild(option);
+      });
+    }
+
+    const botonBuscar = document.getElementById('buscarGoogle');
+
+    document.getElementById('selectorLugar').addEventListener('change', (e) => {
+      const selected = e.target.options[e.target.selectedIndex];
+      document.getElementById('place_id').value = selected.value;
+      document.getElementById('nombre').value = selected.dataset.nombre || '';
+      document.getElementById('direccion').value = selected.dataset.direccion || '';
+      botonBuscar.disabled = !selected.dataset.nombre;
+
+      // ✅ Limpiar mensaje, valor y observaciones
+      document.getElementById('resultado').innerText = '';
+      document.getElementById('valor').value = '';
+      document.getElementById('observaciones').value = '';
+    });
+
+    botonBuscar.addEventListener('click', () => {
+      const nombre = document.getElementById('nombre').value.trim();
+      const direccion = document.getElementById('direccion').value.trim();
+      const query = encodeURIComponent(`${nombre} ${direccion}`);
+      const url = `https://www.google.com/search?q=${query}`;
+      window.open(url, '_blank');
+    });
+
+    document.getElementById('scrapForm').addEventListener('submit', async function (e) {
+      e.preventDefault();
+
+      const data = {
+        place_id: document.getElementById('place_id').value.trim(),
+        nombre: document.getElementById('nombre').value.trim(),
+        tipo_dato: document.getElementById('tipo_dato').value,
+        valor: document.getElementById('valor').value.trim(),
+        fuente: document.getElementById('fuente').value,
+        observaciones: document.getElementById('observaciones').value.trim()
+      };
+
+      const res = await fetch('/api/guardar-scrap', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+
+      const result = await res.json();
+      const mensaje = res.ok ? `✅ ${result.mensaje}` : `❌ ${result.mensaje || 'Error inesperado'}`;
+      document.getElementById('resultado').innerText = mensaje;
+    });
+
+    cargarLugares();
+  </script>
+</body>
+</html>

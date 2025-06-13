@@ -4,11 +4,14 @@ const mysql = require('mysql2/promise');
 require('dotenv').config();
 const axios = require('axios');
 
+const { guardarDatoScrap } = require('./scripts/guardar_scrap');
+
 const app = express();
 const PORT = 3000;
 
 app.use(cors());
 app.use(express.json());
+app.use(express.static('public'));
 
 const pool = mysql.createPool({
   host: process.env.DB_HOST,
@@ -17,7 +20,60 @@ const pool = mysql.createPool({
   database: process.env.DB_DATABASE,
 });
 
-// Obtener grilla por nombre
+// Guardar scrap manual y actualizar ll_lugares si corresponde
+app.post('/api/guardar-scrap', async (req, res) => {
+  try {
+    const data = req.body;
+
+    if (!data || !data.place_id || !data.tipo_dato || !data.valor) {
+      return res.status(400).json({ mensaje: 'Faltan datos obligatorios' });
+    }
+
+    await guardarDatoScrap(data);
+
+    // Si es teléfono o sitio web, actualiza también ll_lugares
+    if (['telefono', 'sitio_web'].includes(data.tipo_dato)) {
+      const campo = data.tipo_dato;
+      const valor = data.valor;
+      await pool.query(
+        `UPDATE ll_lugares SET ${campo} = ? WHERE place_id = ?`,
+        [valor, data.place_id]
+      );
+    }
+
+    res.status(200).json({ mensaje: 'Dato guardado correctamente' });
+  } catch (error) {
+    console.error('Error al guardar scrap:', error.message);
+    res.status(500).json({ mensaje: 'Error al guardar scrap' });
+  }
+});
+
+// CORREGIDO: lugares incompletos reales
+app.get('/api/lugares-incompletos', async (req, res) => {
+  try {
+    const [rows] = await pool.query(`
+      SELECT l.place_id, l.nombre, l.direccion
+      FROM ll_lugares l
+      WHERE (
+        (l.telefono IS NULL OR l.telefono = '')
+        OR (l.sitio_web IS NULL OR l.sitio_web = '')
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM ll_lugares_scrap s
+        WHERE s.place_id = l.place_id
+        AND s.tipo_dato IN ('telefono', 'sitio_web')
+      )
+      LIMIT 100
+    `);
+    res.json(rows);
+  } catch (error) {
+    console.error('Error al obtener lugares incompletos:', error.message);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+// Otros endpoints que ya tenías:
+
 app.get('/api/grilla/:nombre', async (req, res) => {
   const nombre = req.params.nombre;
   try {
@@ -32,7 +88,6 @@ app.get('/api/grilla/:nombre', async (req, res) => {
   }
 });
 
-// Obtener rubros activos
 app.get('/api/rubros-activos', async (req, res) => {
   try {
     const [rows] = await pool.query(
@@ -45,7 +100,6 @@ app.get('/api/rubros-activos', async (req, res) => {
   }
 });
 
-// Obtener celdas ya buscadas
 app.get('/api/celdas-ya-buscadas', async (req, res) => {
   const keyword = req.query.keyword;
   if (!keyword) {
@@ -64,7 +118,6 @@ app.get('/api/celdas-ya-buscadas', async (req, res) => {
   }
 });
 
-// Actualizar estado de celda
 app.put('/api/grilla/:id', async (req, res) => {
   const id = req.params.id;
   const { estado } = req.body;
@@ -80,7 +133,6 @@ app.put('/api/grilla/:id', async (req, res) => {
   }
 });
 
-// Buscar lugares y registrar
 app.post('/api/buscar-en-celdas', async (req, res) => {
   const { keyword, modo = 'rubro', celdas } = req.body;
   const apiKey = process.env.GOOGLE_API_KEY;
@@ -135,7 +187,6 @@ app.post('/api/buscar-en-celdas', async (req, res) => {
         const lat = geometry?.location?.lat || 0;
         const lng = geometry?.location?.lng || 0;
 
-        // Detectar zona más cercana activa
         const [[zona]] = await pool.query(
           `SELECT id FROM ll_zonas
            WHERE activo = 1
@@ -180,6 +231,7 @@ app.post('/api/buscar-en-celdas', async (req, res) => {
   }
 });
 
+// Iniciar servidor
 app.listen(PORT, () => {
   console.log(`✅ Servidor API escuchando en http://localhost:${PORT}`);
 });
