@@ -5,10 +5,7 @@
   <title>Mapa con Grilla Avanzada</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <style>
-    #map {
-      width: 100%;
-      height: 90vh;
-    }
+    #map { width: 100%; height: 90vh; }
     .panel {
       text-align: center;
       margin-bottom: 10px;
@@ -27,10 +24,8 @@
     <label for="keywordDropdown">Seleccionar rubro:</label>
     <select id="keywordDropdown"></select>
     <button id="buscarPorRubro">🔍 Buscar por rubro</button><br>
-
     <input type="text" id="keywordTexto" placeholder="Buscar por texto libre">
     <button id="buscarPorTexto">🔍 Buscar por texto</button><br>
-
     <button id="botonLimpiar">🧹 Limpiar selección</button><br>
     <span id="contadorSeleccionadas"></span> · <span id="contadorBusquedas"></span>
   </div>
@@ -57,28 +52,34 @@
     let rubros = [];
 
     async function cargarRubros() {
-      const res = await fetch('http://localhost:3000/api/rubros-activos');
-      rubros = await res.json();
-      const selector = document.getElementById('keywordDropdown');
-      selector.innerHTML = '';
-      rubros.forEach(r => {
-        const option = document.createElement('option');
-        option.value = r.keyword_google;
-        option.textContent = r.nombre_es || r.keyword_google;
-        selector.appendChild(option);
-      });
-      if (rubros.length > 0) {
-        cargarGrilla(rubros[0].keyword_google);
-        selector.addEventListener('change', () => {
-          cargarGrilla(selector.value);
+      try {
+        const res = await fetch('/api/rubros');
+        rubros = await res.json();
+        rubros.sort((a, b) => a.nombre_es.localeCompare(b.nombre_es));
+        const selector = document.getElementById('keywordDropdown');
+        selector.innerHTML = '';
+        rubros.forEach(r => {
+          const option = document.createElement('option');
+          option.value = r.keyword_google;
+          option.textContent = r.nombre_es || r.keyword_google;
+          selector.appendChild(option);
         });
+        if (rubros.length > 0) {
+          await cargarGrilla(rubros[0].keyword_google);
+          selector.addEventListener('change', () => {
+            cargarGrilla(selector.value);
+          });
+        }
+      } catch (error) {
+        alert('Error al cargar rubros');
+        console.error(error);
       }
     }
 
     async function cargarGrilla(keyword) {
-      const res1 = await fetch(`http://localhost:3000/api/grilla/${grillaNombre}`);
+      const res1 = await fetch(`/api/grilla/${grillaNombre}`);
       const celdas = await res1.json();
-      const res2 = await fetch(`http://localhost:3000/api/celdas-ya-buscadas?keyword=${encodeURIComponent(keyword)}`);
+      const res2 = await fetch(`/api/grilla/celdas-ya-buscadas?keyword=${encodeURIComponent(keyword)}&grilla_nombre=${encodeURIComponent(grillaNombre)}`);
       const yaBuscadas = await res2.json();
 
       rectangulos.clear();
@@ -87,6 +88,7 @@
       });
 
       let contadorYaBuscadas = 0;
+
       celdas.forEach(celda => {
         const bounds = [[celda.lat1, celda.lng1], [celda.lat2, celda.lng2]];
         let estado = celda.estado;
@@ -106,13 +108,14 @@
           if (rect.estado === 'buscada') return;
           rect.seleccionado = !rect.seleccionado;
           rect.setStyle({
-            color: rect.seleccionado ? '#28a745' : colores[rect.estado],
-            fillColor: rect.seleccionado ? '#28a745' : colores[rect.estado]
+            color: rect.seleccionado ? colores.seleccionado : colores[rect.estado],
+            fillColor: rect.seleccionado ? colores.seleccionado : colores[rect.estado]
           });
           actualizarContadorSeleccionadas();
         });
         rectangulos.set(celda.codigo, rect);
       });
+
       document.getElementById('contadorBusquedas').textContent = `🔍 Ya buscadas: ${contadorYaBuscadas}`;
       actualizarContadorSeleccionadas();
     }
@@ -146,7 +149,7 @@
       const keyword = document.getElementById('keywordDropdown').value;
       const celdas = obtenerCeldasSeleccionadas();
       if (celdas.length === 0) return alert("⚠️ No seleccionaste celdas.");
-      const res = await fetch('http://localhost:3000/api/buscar-en-celdas', {
+      const res = await fetch('/api/buscar-en-celdas', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ keyword, modo: 'rubro', celdas })
@@ -164,13 +167,14 @@
       const celdas = obtenerCeldasSeleccionadas();
       if (!keyword) return alert("⚠️ Escribí algo para buscar.");
       if (celdas.length === 0) return alert("⚠️ No seleccionaste celdas.");
-      const res = await fetch('http://localhost:3000/api/buscar-en-celdas', {
+      const res = await fetch('/api/buscar-en-celdas', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ keyword, modo: 'texto', celdas })
       });
       if (res.ok) {
         alert("✅ Búsqueda por texto completada.");
+        cargarGrilla(document.getElementById('keywordDropdown').value);
       } else {
         alert("❌ Error al buscar por texto.");
       }
@@ -180,3 +184,5 @@
   </script>
 </body>
 </html>
+
+
