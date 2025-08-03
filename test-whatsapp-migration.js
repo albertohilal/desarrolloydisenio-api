@@ -10,11 +10,11 @@ async function runMigration() {
     const migrationPath = path.join(__dirname, 'database', 'migration_whatsapp_tables.sql');
     const migrationSQL = fs.readFileSync(migrationPath, 'utf8');
     
-    // Split by statements and execute each one
+    // Split by statements and execute each one, handling multi-line statements properly
     const statements = migrationSQL
-      .split(';')
+      .split(/;\s*\n/)
       .map(stmt => stmt.trim())
-      .filter(stmt => stmt.length > 0 && !stmt.startsWith('--'));
+      .filter(stmt => stmt.length > 0 && !stmt.startsWith('--') && !stmt.startsWith('/*'));
     
     console.log(`📝 Ejecutando ${statements.length} sentencias SQL...`);
     
@@ -22,17 +22,31 @@ async function runMigration() {
       const statement = statements[i];
       if (statement.trim()) {
         try {
-          await pool.query(statement);
+          // Handle stored procedure statements separately
+          if (statement.includes('PREPARE') || statement.includes('EXECUTE') || statement.includes('DEALLOCATE')) {
+            const lines = statement.split('\n').filter(line => line.trim());
+            for (const line of lines) {
+              if (line.trim()) {
+                await pool.query(line.trim());
+              }
+            }
+          } else {
+            await pool.query(statement);
+          }
           console.log(`✅ Sentencia ${i + 1} ejecutada correctamente`);
         } catch (err) {
           // Some statements might fail if the column/table already exists, that's OK
           if (err.code === 'ER_DUP_FIELDNAME' || 
               err.code === 'ER_TABLE_EXISTS_ERROR' ||
-              err.message.includes('already exists')) {
-            console.log(`⚠️  Sentencia ${i + 1} omitida (ya existe): ${err.message}`);
+              err.code === 'ER_DUP_ENTRY' ||
+              err.message.includes('already exists') ||
+              err.message.includes('Duplicate column name') ||
+              err.message.includes('Duplicate key name')) {
+            console.log(`⚠️  Sentencia ${i + 1} omitida (ya existe): ${err.message.substring(0, 100)}`);
           } else {
             console.error(`❌ Error en sentencia ${i + 1}:`, err.message);
-            console.error(`Sentencia: ${statement.substring(0, 100)}...`);
+            console.error(`Sentencia: ${statement.substring(0, 200)}...`);
+            // Don't throw error for non-critical failures
           }
         }
       }
