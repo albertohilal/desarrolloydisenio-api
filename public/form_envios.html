@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Formulario de Envíos</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background-color: #f5f5f5;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #333;
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    .filter-section {
+      background: #f8f9fa;
+      padding: 15px;
+      border-radius: 5px;
+      margin-bottom: 20px;
+    }
+    .filter-group {
+      display: flex;
+      gap: 15px;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    label {
+      font-weight: bold;
+      margin-right: 10px;
+    }
+    select, input, button {
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    button {
+      background-color: #007bff;
+      color: white;
+      border: none;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+    .btn-secondary {
+      background-color: #6c757d;
+    }
+    .btn-secondary:hover {
+      background-color: #545b62;
+    }
+    .results-section {
+      margin-top: 20px;
+    }
+    .results-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 15px;
+    }
+    .count-info {
+      font-weight: bold;
+      color: #28a745;
+    }
+    .table-container {
+      overflow-x: auto;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 8px;
+      text-align: left;
+    }
+    th {
+      background-color: #f8f9fa;
+      font-weight: bold;
+    }
+    tr:nth-child(even) {
+      background-color: #f8f9fa;
+    }
+    tr:hover {
+      background-color: #e9ecef;
+    }
+    .status-badge {
+      padding: 3px 8px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: bold;
+    }
+    .status-valid {
+      background-color: #d4edda;
+      color: #155724;
+    }
+    .status-invalid {
+      background-color: #f8d7da;
+      color: #721c24;
+    }
+    .loading {
+      text-align: center;
+      color: #666;
+      font-style: italic;
+    }
+    .error {
+      color: #dc3545;
+      background-color: #f8d7da;
+      padding: 10px;
+      border-radius: 4px;
+      margin: 10px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>📦 Formulario de Envíos - Filtrado por WhatsApp</h1>
+    
+    <div class="filter-section">
+      <h3>🔍 Filtros de Búsqueda</h3>
+      
+      <div class="filter-group">
+        <label for="wappValidoFilter">Estado WhatsApp:</label>
+        <select id="wappValidoFilter">
+          <option value="">Todos los lugares</option>
+          <option value="1">✅ Válidos para WhatsApp</option>
+          <option value="0">❌ No válidos para WhatsApp</option>
+        </select>
+        
+        <label for="rubroFilter">Rubro:</label>
+        <select id="rubroFilter">
+          <option value="">Todos los rubros</option>
+        </select>
+        
+        <label for="zonaFilter">Zona:</label>
+        <select id="zonaFilter">
+          <option value="">Todas las zonas</option>
+        </select>
+      </div>
+      
+      <div class="filter-group">
+        <label for="searchText">Buscar texto:</label>
+        <input type="text" id="searchText" placeholder="Nombre, dirección, teléfono...">
+        
+        <button type="button" onclick="aplicarFiltros()">🔍 Buscar</button>
+        <button type="button" class="btn-secondary" onclick="limpiarFiltros()">🗑️ Limpiar</button>
+      </div>
+    </div>
+
+    <div class="results-section">
+      <div class="results-header">
+        <h3>📋 Resultados</h3>
+        <div class="count-info" id="countInfo">Cargando...</div>
+      </div>
+      
+      <div id="loadingIndicator" class="loading">
+        Cargando datos...
+      </div>
+      
+      <div id="errorContainer"></div>
+      
+      <div class="table-container">
+        <table id="resultsTable" style="display: none;">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Nombre</th>
+              <th>Dirección</th>
+              <th>Teléfono</th>
+              <th>Email</th>
+              <th>WhatsApp Válido</th>
+              <th>Rubro</th>
+              <th>Zona</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="resultsBody">
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let allLugares = [];
+    let rubros = {};
+    let zonas = {};
+
+    // Cargar datos iniciales
+    async function init() {
+      try {
+        await Promise.all([
+          cargarLugares(),
+          cargarRubros(),
+          cargarZonas()
+        ]);
+        aplicarFiltros();
+      } catch (error) {
+        console.error('Error en inicialización:', error);
+        mostrarError('Error al cargar los datos iniciales');
+      }
+    }
+
+    // Cargar todos los lugares con información de WhatsApp
+    async function cargarLugares() {
+      try {
+        const response = await fetch('/api/lugares-envios');
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        allLugares = await response.json();
+      } catch (error) {
+        console.error('Error cargando lugares:', error);
+        throw error;
+      }
+    }
+
+    // Cargar rubros para el filtro
+    async function cargarRubros() {
+      try {
+        const response = await fetch('/api/rubros');
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const rubrosList = await response.json();
+        
+        rubros = {};
+        const rubroSelect = document.getElementById('rubroFilter');
+        rubroSelect.innerHTML = '<option value="">Todos los rubros</option>';
+        
+        rubrosList.forEach(rubro => {
+          rubros[rubro.id] = rubro.nombre_es;
+          const option = document.createElement('option');
+          option.value = rubro.id;
+          option.textContent = rubro.nombre_es;
+          rubroSelect.appendChild(option);
+        });
+      } catch (error) {
+        console.error('Error cargando rubros:', error);
+      }
+    }
+
+    // Cargar zonas para el filtro (placeholder - ajustar según estructura real)
+    async function cargarZonas() {
+      try {
+        const response = await fetch('/api/zonas');
+        if (!response.ok) {
+          // Si no existe endpoint de zonas, crear lista básica
+          zonas = {
+            1: 'Zona 1', 2: 'Zona 2', 3: 'Zona 3', 4: 'Zona 4', 5: 'Zona 5',
+            6: 'Zona 6', 7: 'Zona 7', 8: 'Zona 8', 9: 'Zona 9'
+          };
+          return;
+        }
+        
+        const zonasList = await response.json();
+        zonas = {};
+        const zonaSelect = document.getElementById('zonaFilter');
+        zonaSelect.innerHTML = '<option value="">Todas las zonas</option>';
+        
+        zonasList.forEach(zona => {
+          zonas[zona.id] = zona.nombre;
+          const option = document.createElement('option');
+          option.value = zona.id;
+          option.textContent = zona.nombre;
+          zonaSelect.appendChild(option);
+        });
+      } catch (error) {
+        console.error('Error cargando zonas:', error);
+        // Fallback con zonas numeradas
+        const zonaSelect = document.getElementById('zonaFilter');
+        for (let i = 1; i <= 9; i++) {
+          const option = document.createElement('option');
+          option.value = i;
+          option.textContent = `Zona ${i}`;
+          zonaSelect.appendChild(option);
+          zonas[i] = `Zona ${i}`;
+        }
+      }
+    }
+
+    // Aplicar filtros y mostrar resultados
+    function aplicarFiltros() {
+      const wappValido = document.getElementById('wappValidoFilter').value;
+      const rubroId = document.getElementById('rubroFilter').value;
+      const zonaId = document.getElementById('zonaFilter').value;
+      const searchText = document.getElementById('searchText').value.toLowerCase();
+
+      let filteredLugares = allLugares.filter(lugar => {
+        // Filtro por WhatsApp válido
+        if (wappValido !== '' && lugar.wapp_valido.toString() !== wappValido) {
+          return false;
+        }
+        
+        // Filtro por rubro
+        if (rubroId !== '' && lugar.rubro_id.toString() !== rubroId) {
+          return false;
+        }
+        
+        // Filtro por zona
+        if (zonaId !== '' && lugar.zona_id && lugar.zona_id.toString() !== zonaId) {
+          return false;
+        }
+        
+        // Filtro por texto
+        if (searchText) {
+          const searchableText = [
+            lugar.nombre || '',
+            lugar.direccion || '',
+            lugar.telefono || '',
+            lugar.email || ''
+          ].join(' ').toLowerCase();
+          
+          if (!searchableText.includes(searchText)) {
+            return false;
+          }
+        }
+        
+        return true;
+      });
+
+      mostrarResultados(filteredLugares);
+    }
+
+    // Mostrar resultados en la tabla
+    function mostrarResultados(lugares) {
+      const tbody = document.getElementById('resultsBody');
+      const countInfo = document.getElementById('countInfo');
+      const table = document.getElementById('resultsTable');
+      const loading = document.getElementById('loadingIndicator');
+      
+      loading.style.display = 'none';
+      table.style.display = 'table';
+      
+      countInfo.textContent = `${lugares.length} lugar(es) encontrado(s)`;
+      
+      tbody.innerHTML = '';
+      
+      lugares.forEach(lugar => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td>${lugar.id}</td>
+          <td>${lugar.nombre || 'Sin nombre'}</td>
+          <td>${lugar.direccion || 'Sin dirección'}</td>
+          <td>${lugar.telefono || 'Sin teléfono'}</td>
+          <td>${lugar.email || 'Sin email'}</td>
+          <td>
+            <span class="status-badge ${lugar.wapp_valido ? 'status-valid' : 'status-invalid'}">
+              ${lugar.wapp_valido ? '✅ Válido' : '❌ No válido'}
+            </span>
+          </td>
+          <td>${rubros[lugar.rubro_id] || 'Sin rubro'}</td>
+          <td>${lugar.zona_id ? (zonas[lugar.zona_id] || `Zona ${lugar.zona_id}`) : 'Sin zona'}</td>
+          <td>
+            <button onclick="enviarWhatsApp('${lugar.telefono || ''}', '${lugar.nombre || ''}')" 
+                    ${!lugar.wapp_valido || !lugar.telefono ? 'disabled' : ''}>
+              📱 WhatsApp
+            </button>
+          </td>
+        `;
+        tbody.appendChild(row);
+      });
+    }
+
+    // Limpiar todos los filtros
+    function limpiarFiltros() {
+      document.getElementById('wappValidoFilter').value = '';
+      document.getElementById('rubroFilter').value = '';
+      document.getElementById('zonaFilter').value = '';
+      document.getElementById('searchText').value = '';
+      aplicarFiltros();
+    }
+
+    // Enviar mensaje por WhatsApp
+    function enviarWhatsApp(telefono, nombre) {
+      if (!telefono) {
+        alert('Este lugar no tiene teléfono registrado');
+        return;
+      }
+      
+      // Limpiar el número de teléfono
+      const numeroLimpio = telefono.replace(/[^\d]/g, '');
+      const mensaje = `Hola ${nombre}, me contacto por...`;
+      const url = `https://wa.me/${numeroLimpio}?text=${encodeURIComponent(mensaje)}`;
+      window.open(url, '_blank');
+    }
+
+    // Mostrar errores
+    function mostrarError(mensaje) {
+      const errorContainer = document.getElementById('errorContainer');
+      errorContainer.innerHTML = `<div class="error">❌ ${mensaje}</div>`;
+      document.getElementById('loadingIndicator').style.display = 'none';
+    }
+
+    // Inicializar cuando se carga la página
+    document.addEventListener('DOMContentLoaded', init);
+  </script>
+</body>
+</html>
