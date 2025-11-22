@@ -70,4 +70,91 @@ router.get('/celdas-ya-buscadas', async (req, res) => {
   }
 });
 
+// Obtener estados de celdas para un rubro específico
+router.get('/estados/:grillaNombre/:rubroId', async (req, res) => {
+  const { grillaNombre, rubroId } = req.params;
+  
+  try {
+    const [rows] = await pool.query(`
+      SELECT 
+        g.id as grilla_id,
+        g.codigo,
+        g.lat1,
+        g.lat2,
+        g.lng1,
+        g.lng2,
+        COALESCE(gr.estado, 'pendiente') as estado,
+        gr.fecha_modificacion
+      FROM ll_grilla g
+      LEFT JOIN ll_grilla_rubros gr ON g.id = gr.grilla_id AND gr.rubro_id = ?
+      WHERE g.grilla_nombre = ?
+      ORDER BY g.codigo
+    `, [rubroId, grillaNombre]);
+    
+    res.json(rows);
+  } catch (error) {
+    console.error('❌ Error al obtener estados:', error);
+    res.status(500).json({ error: 'Error al cargar estados' });
+  }
+});
+
+// Actualizar estado de una celda para un rubro
+router.put('/estados/:grillaId/:rubroId', async (req, res) => {
+  const { grillaId, rubroId } = req.params;
+  const { estado } = req.body;
+  
+  const estadosValidos = ['pendiente', 'seleccionado', 'revisar', 'descartado'];
+  if (!estadosValidos.includes(estado)) {
+    return res.status(400).json({ error: 'Estado inválido' });
+  }
+  
+  try {
+    await pool.query(`
+      INSERT INTO ll_grilla_rubros (grilla_id, rubro_id, estado)
+      VALUES (?, ?, ?)
+      ON DUPLICATE KEY UPDATE estado = VALUES(estado)
+    `, [grillaId, rubroId, estado]);
+    
+    res.json({ success: true, message: 'Estado actualizado' });
+  } catch (error) {
+    console.error('❌ Error al actualizar estado:', error);
+    res.status(500).json({ error: 'Error al actualizar estado' });
+  }
+});
+
+// Actualizar múltiples estados a la vez
+router.post('/estados/batch', async (req, res) => {
+  const { actualizaciones } = req.body; // Array de {grilla_id, rubro_id, estado}
+  
+  if (!Array.isArray(actualizaciones) || actualizaciones.length === 0) {
+    return res.status(400).json({ error: 'Se requiere array de actualizaciones' });
+  }
+  
+  try {
+    const connection = await pool.getConnection();
+    await connection.beginTransaction();
+    
+    try {
+      for (const act of actualizaciones) {
+        await connection.query(`
+          INSERT INTO ll_grilla_rubros (grilla_id, rubro_id, estado)
+          VALUES (?, ?, ?)
+          ON DUPLICATE KEY UPDATE estado = VALUES(estado)
+        `, [act.grilla_id, act.rubro_id, act.estado]);
+      }
+      
+      await connection.commit();
+      res.json({ success: true, message: `${actualizaciones.length} estados actualizados` });
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+  } catch (error) {
+    console.error('❌ Error al actualizar estados batch:', error);
+    res.status(500).json({ error: 'Error al actualizar estados' });
+  }
+});
+
 module.exports = router;
