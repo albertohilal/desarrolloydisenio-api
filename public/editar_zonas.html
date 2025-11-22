@@ -60,7 +60,7 @@
   <script>
     async function obtenerZonas() {
       try {
-        const response = await fetch('zonas.php');
+        const response = await fetch('/api/grillas/zonas');
         const data = await response.json();
         const tbody = document.querySelector('#tabla-zonas tbody');
         tbody.innerHTML = '';
@@ -89,6 +89,7 @@
         });
       } catch (error) {
         console.error('Error al obtener zonas:', error);
+        alert('Error al cargar las zonas. Por favor, recarga la página.');
       }
     }
 
@@ -100,16 +101,22 @@
       const activo = document.getElementById(`activo-${id}`).value;
 
       try {
-        const response = await fetch(`zonas.php?id=${id}`, {
-          method: 'POST',
+        const response = await fetch(`/api/grillas/zonas/${id}`, {
+          method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ nombre, latitud, longitud, busqueda, activo })
         });
 
-        const resultado = await response.text();
-        alert(resultado);
+        if (!response.ok) {
+          throw new Error('Error al actualizar');
+        }
+
+        const resultado = await response.json();
+        alert('Zona actualizada correctamente');
+        obtenerZonas(); // Recargar la tabla
       } catch (error) {
         console.error('Error al actualizar zona:', error);
+        alert('Error al actualizar la zona');
       }
     }
 

@@ -13,6 +13,23 @@ router.get('/zonas', async (req, res) => {
   }
 });
 
+// Actualizar una zona
+router.put('/zonas/:id', async (req, res) => {
+  const { id } = req.params;
+  const { nombre, latitud, longitud, busqueda, activo } = req.body;
+  
+  try {
+    await pool.query(
+      'UPDATE ll_zonas SET nombre = ?, latitud = ?, longitud = ?, busqueda = ?, activo = ? WHERE id = ?',
+      [nombre, latitud, longitud, busqueda, activo, id]
+    );
+    res.json({ success: true, message: 'Zona actualizada correctamente' });
+  } catch (error) {
+    console.error('❌ Error al actualizar zona:', error);
+    res.status(500).json({ error: 'Error al actualizar zona' });
+  }
+});
+
 // Obtener todas las celdas de una grilla por nombre
 router.get('/:nombre', async (req, res) => {
   const nombre = req.params.nombre;

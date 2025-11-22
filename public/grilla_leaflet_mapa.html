@@ -53,15 +53,19 @@
 
     async function cargarRubros() {
       try {
-        const res = await fetch('/api/rubros');
+        const res = await fetch('/api/rubros/rubros-activos');
         rubros = await res.json();
-        rubros.sort((a, b) => a.nombre_es.localeCompare(b.nombre_es));
+        rubros.sort((a, b) => {
+          const nombreA = a.nombre_es || a.nombre || '';
+          const nombreB = b.nombre_es || b.nombre || '';
+          return nombreA.localeCompare(nombreB);
+        });
         const selector = document.getElementById('keywordDropdown');
         selector.innerHTML = '';
         rubros.forEach(r => {
           const option = document.createElement('option');
           option.value = r.keyword_google;
-          option.textContent = r.nombre_es || r.keyword_google;
+          option.textContent = r.nombre || r.keyword_google;
           selector.appendChild(option);
         });
         if (rubros.length > 0) {
@@ -77,9 +81,9 @@
     }
 
     async function cargarGrilla(keyword) {
-      const res1 = await fetch(`/api/grilla/${grillaNombre}`);
+      const res1 = await fetch(`/api/grillas/${grillaNombre}`);
       const celdas = await res1.json();
-      const res2 = await fetch(`/api/grilla/celdas-ya-buscadas?keyword=${encodeURIComponent(keyword)}&grilla_nombre=${encodeURIComponent(grillaNombre)}`);
+      const res2 = await fetch(`/api/grillas/celdas-ya-buscadas?keyword=${encodeURIComponent(keyword)}&grilla_nombre=${encodeURIComponent(grillaNombre)}`);
       const yaBuscadas = await res2.json();
 
       rectangulos.clear();
