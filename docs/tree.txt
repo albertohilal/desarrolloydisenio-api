@@ -1,0 +1,91 @@
+.
+├── __archivados
+│   └── test-db.js
+├── database
+│   ├── 2025-03-23-12-18iunaorg_doli184.sql
+│   ├── 2025-03-23-iunaorg_doli184.sql
+│   ├── 2025-03-30-12-04-ll_lugares.sql
+│   ├── 2025-03-30-20-26-ll_lugares.sql
+│   ├── 2025-03-30-ll_rubros.sql
+│   ├── 2025-03-30-rubros.sql
+│   ├── ll_rubros_insert.sql
+│   └── ll_rubros.sql
+├── db.js
+├── docs
+│   └── tree.txt
+├── Google Cloud
+│   ├── claves y tokens
+│   └── Claves y Tokens.url
+├── index.js
+├── listados
+│   ├── keywords_google_traducidos.csv
+│   ├── ll_rubros_populares.csv
+│   ├── nombre.csv
+│   ├── nombre_es.csv
+│   ├── places.csv
+│   └── places_GooglePlaces.csv
+├── logs
+│   ├── lugares-2025-03-24_19-48.log
+│   └── lugares-2025-03-25_18-30.log
+├── lugares-2025-03-24_15-36.log
+├── oauth
+│   └── callback
+│       ├── callback-OLD-1.php
+│       ├── callback-OLD.php
+│       └── callback.php
+├── package.json
+├── package-lock.json
+├── portfolio
+├── precios
+│   └── precios.html
+├── public
+│   ├── cuadriculas.html
+│   ├── favicon.ico
+│   ├── form_scrap.html
+│   ├── grilla-conurbano-sur-extendida-v1.html
+│   ├── grilla-conurbano_sur_v1_extendida.json
+│   ├── grilla.html
+│   ├── grilla_leaflet_mapa.html
+│   ├── grilla_mapa.html
+│   ├── mapa_tatuadores.html
+│   └── rubros.html
+├── README.md
+├── routes
+│   ├── busqueda.js
+│   ├── grillas.js
+│   ├── lugares.js
+│   └── rubros.js
+├── rubros_backend
+│   ├── config.php
+│   ├── index.html
+│   ├── rubros.php
+│   ├── zonas.html
+│   └── zonas.php
+├── scripts
+│   ├── busqueda
+│   │   ├── buscar_desde_rubros.js
+│   │   ├── buscar_tatuadores.js
+│   │   ├── buscar_texto.js
+│   │   └── completar_detalles.js
+│   ├── cargar_grilla_json_en_bd.js
+│   ├── exportar_grilla_json.js
+│   ├── generar_grilla_conurbano.js
+│   ├── generar_zonas.js
+│   ├── guardar_scrap.js
+│   ├── index-busquedas.js
+│   ├── index-nearbysearch-detallado.js
+│   ├── index-nearbysearch.js
+│   ├── index-textsearch.js
+│   ├── insertar_grilla_sintetica.js
+│   ├── obtener_celdas_ya_buscadas.js
+│   ├── test-buscar-rubro.js
+│   ├── test-buscar-texto.js
+│   ├── test-db.js
+│   └── utilidades
+│       ├── calcular_costo_busqueda.js
+│       ├── ver_rubros.js
+│       └── ver_zonas.js
+├── servidor.js
+└── sync-inteligente.sh
+
+16 directories, 72 files
