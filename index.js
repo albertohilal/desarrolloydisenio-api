@@ -22,9 +22,9 @@ app.use('/api/rubros', rubrosRoutes);
 const lugaresRoutes = require('./routes/lugares');
 app.use('/api/lugares', lugaresRoutes);
 
-// Redirección inicial opcional
+// Página de inicio
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'grilla_mapa.html'));
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 // Iniciar servidor
