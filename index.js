@@ -11,6 +11,7 @@ app.use(express.json());
 
 // Archivos estáticos
 app.use(express.static(path.join(__dirname, 'public')));
+app.use('/rubros_backend', express.static(path.join(__dirname, 'rubros_backend')));
 
 // Rutas API
 const grillasRoutes = require('./routes/grillas');
