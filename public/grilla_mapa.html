@@ -104,7 +104,7 @@
 
     async function cargarMapaParaKeyword(keyword) {
       try {
-        const res = await fetch(`http://localhost:3001/api/celdas-ya-buscadas?keyword=${encodeURIComponent(keyword)}`);
+        const res = await fetch(`http://localhost:3000/api/grillas/celdas-ya-buscadas?keyword=${encodeURIComponent(keyword)}&grilla_nombre=default`);
         const celdasYaBuscadas = await res.json();
 
         pintarGrillaEnMapa(grilla, celdasYaBuscadas);
@@ -120,7 +120,7 @@
 
     async function cargarRubrosActivos() {
       try {
-        const res = await fetch("http://localhost:3001/api/rubros-activos");
+        const res = await fetch("http://localhost:3000/api/rubros/rubros-activos");
         const rubros = await res.json();
         const selector = document.getElementById("keyword");
 

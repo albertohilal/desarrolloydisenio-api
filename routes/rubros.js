@@ -16,7 +16,7 @@ router.get('/', async (req, res) => {
 // ✅ Obtener solo los rubros activos (busqueda = 1)
 router.get('/rubros-activos', async (req, res) => {
   try {
-    const [rows] = await pool.query('SELECT id, keyword_google, nombre_es FROM ll_rubros WHERE busqueda = 1');
+    const [rows] = await pool.query('SELECT id, keyword_google, COALESCE(nombre_es, nombre) as nombre FROM ll_rubros WHERE busqueda = 1');
     res.json(rows);
   } catch (error) {
     console.error('Error al obtener rubros activos:', error.message);

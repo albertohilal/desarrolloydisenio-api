@@ -2,6 +2,17 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../db');
 
+// Obtener todas las zonas
+router.get('/zonas', async (req, res) => {
+  try {
+    const [rows] = await pool.query('SELECT * FROM ll_zonas ORDER BY nombre');
+    res.json(rows);
+  } catch (error) {
+    console.error('❌ Error al obtener zonas:', error);
+    res.status(500).json({ error: 'Error al cargar zonas' });
+  }
+});
+
 // Obtener todas las celdas de una grilla por nombre
 router.get('/:nombre', async (req, res) => {
   const nombre = req.params.nombre;

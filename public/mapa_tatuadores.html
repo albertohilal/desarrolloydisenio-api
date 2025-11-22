@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mapa de Tatuadores - Lomas de Zamora</title>
+  
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #f5f5f5;
+    }
+
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 20px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+
+    .header h1 {
+      font-size: 28px;
+      margin-bottom: 10px;
+    }
+
+    .stats {
+      display: flex;
+      gap: 20px;
+      margin-top: 10px;
+      flex-wrap: wrap;
+    }
+
+    .stat-box {
+      background: rgba(255,255,255,0.2);
+      padding: 10px 20px;
+      border-radius: 8px;
+      backdrop-filter: blur(10px);
+    }
+
+    .stat-box span {
+      font-size: 24px;
+      font-weight: bold;
+    }
+
+    .controls {
+      background: white;
+      padding: 15px 20px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      display: flex;
+      gap: 15px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .controls select, .controls input {
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      font-size: 14px;
+    }
+
+    .controls button {
+      padding: 8px 16px;
+      background: #667eea;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: background 0.3s;
+    }
+
+    .controls button:hover {
+      background: #5568d3;
+    }
+
+    #mapa {
+      height: calc(100vh - 200px);
+      width: 100%;
+    }
+
+    .leaflet-popup-content {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    .popup-title {
+      font-size: 16px;
+      font-weight: bold;
+      color: #333;
+      margin-bottom: 8px;
+    }
+
+    .popup-info {
+      font-size: 13px;
+      line-height: 1.6;
+      color: #666;
+    }
+
+    .popup-info strong {
+      color: #333;
+    }
+
+    .popup-rating {
+      color: #f39c12;
+      font-weight: bold;
+    }
+
+    .loading {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: white;
+      padding: 30px;
+      border-radius: 10px;
+      box-shadow: 0 5px 20px rgba(0,0,0,0.2);
+      text-align: center;
+      z-index: 9999;
+    }
+
+    .loading.hidden {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>🎨 Mapa de Tatuadores - Lomas de Zamora</h1>
+    <div class="stats">
+      <div class="stat-box">
+        <div>Total Tatuadores</div>
+        <span id="totalTatuadores">0</span>
+      </div>
+      <div class="stat-box">
+        <div>En Mapa</div>
+        <span id="enMapa">0</span>
+      </div>
+      <div class="stat-box">
+        <div>Zonas</div>
+        <span id="totalZonas">9</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <label>
+      Filtrar por rubro:
+      <select id="filtroRubro">
+        <option value="">Todos los rubros</option>
+      </select>
+    </label>
+    
+    <label>
+      Buscar:
+      <input type="text" id="busqueda" placeholder="Nombre del tatuador...">
+    </label>
+
+    <button onclick="aplicarFiltros()">🔍 Filtrar</button>
+    <button onclick="limpiarFiltros()">🧹 Limpiar</button>
+  </div>
+
+  <div id="mapa"></div>
+
+  <div id="loading" class="loading">
+    <h3>Cargando tatuadores...</h3>
+    <p>Obteniendo datos de la base de datos</p>
+  </div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <script>
+    let mapa;
+    let todosLosTatuadores = [];
+    let marcadores = [];
+
+    // Inicializar mapa centrado en Lomas de Zamora
+    function inicializarMapa() {
+      mapa = L.map('mapa').setView([-34.7607662, -58.4083934], 13);
+
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors',
+        maxZoom: 19
+      }).addTo(mapa);
+    }
+
+    // Cargar tatuadores desde la API
+    async function cargarTatuadores() {
+      try {
+        const response = await fetch('http://localhost:3000/api/lugares/tatuadores');
+        
+        if (!response.ok) {
+          throw new Error('Error al cargar tatuadores');
+        }
+
+        todosLosTatuadores = await response.json();
+        
+        document.getElementById('totalTatuadores').textContent = todosLosTatuadores.length;
+        
+        cargarRubros();
+        mostrarTatuadoresEnMapa(todosLosTatuadores);
+        
+      } catch (error) {
+        console.error('Error:', error);
+        alert('Error al cargar los tatuadores. Verifica que el servidor esté corriendo.');
+      } finally {
+        document.getElementById('loading').classList.add('hidden');
+      }
+    }
+
+    // Cargar rubros para el filtro
+    function cargarRubros() {
+      const rubrosUnicos = [...new Set(todosLosTatuadores
+        .filter(t => t.rubro_nombre)
+        .map(t => t.rubro_nombre))];
+      
+      const select = document.getElementById('filtroRubro');
+      rubrosUnicos.forEach(rubro => {
+        const option = document.createElement('option');
+        option.value = rubro;
+        option.textContent = rubro;
+        select.appendChild(option);
+      });
+    }
+
+    // Mostrar tatuadores en el mapa
+    function mostrarTatuadoresEnMapa(tatuadores) {
+      // Limpiar marcadores anteriores
+      marcadores.forEach(m => mapa.removeLayer(m));
+      marcadores = [];
+
+      // Filtrar solo los que tienen coordenadas
+      const conCoordenadas = tatuadores.filter(t => t.latitud && t.longitud);
+      
+      document.getElementById('enMapa').textContent = conCoordenadas.length;
+
+      // Crear marcadores
+      conCoordenadas.forEach(tatuador => {
+        const marker = L.marker([tatuador.latitud, tatuador.longitud])
+          .bindPopup(crearPopupContent(tatuador))
+          .addTo(mapa);
+        
+        marcadores.push(marker);
+      });
+
+      // Ajustar zoom si hay marcadores
+      if (conCoordenadas.length > 0) {
+        const bounds = L.latLngBounds(conCoordenadas.map(t => [t.latitud, t.longitud]));
+        mapa.fitBounds(bounds, { padding: [50, 50] });
+      }
+    }
+
+    // Crear contenido del popup
+    function crearPopupContent(tatuador) {
+      return `
+        <div class="popup-title">${tatuador.nombre}</div>
+        <div class="popup-info">
+          ${tatuador.direccion ? `<strong>📍</strong> ${tatuador.direccion}<br>` : ''}
+          ${tatuador.telefono ? `<strong>📞</strong> ${tatuador.telefono}<br>` : ''}
+          ${tatuador.sitio_web ? `<strong>🌐</strong> <a href="${tatuador.sitio_web}" target="_blank">Sitio web</a><br>` : ''}
+          ${tatuador.rating ? `<strong>⭐</strong> <span class="popup-rating">${tatuador.rating}</span> (${tatuador.reviews || 0} reseñas)<br>` : ''}
+          ${tatuador.rubro_nombre ? `<strong>🏷️</strong> ${tatuador.rubro_nombre}` : ''}
+        </div>
+      `;
+    }
+
+    // Aplicar filtros
+    function aplicarFiltros() {
+      const filtroRubro = document.getElementById('filtroRubro').value;
+      const busqueda = document.getElementById('busqueda').value.toLowerCase();
+
+      let filtrados = todosLosTatuadores;
+
+      if (filtroRubro) {
+        filtrados = filtrados.filter(t => t.rubro_nombre === filtroRubro);
+      }
+
+      if (busqueda) {
+        filtrados = filtrados.filter(t => 
+          t.nombre.toLowerCase().includes(busqueda) ||
+          (t.direccion && t.direccion.toLowerCase().includes(busqueda))
+        );
+      }
+
+      mostrarTatuadoresEnMapa(filtrados);
+    }
+
+    // Limpiar filtros
+    function limpiarFiltros() {
+      document.getElementById('filtroRubro').value = '';
+      document.getElementById('busqueda').value = '';
+      mostrarTatuadoresEnMapa(todosLosTatuadores);
+    }
+
+    // Inicializar al cargar la página
+    window.onload = () => {
+      inicializarMapa();
+      cargarTatuadores();
+    };
+  </script>
+</body>
+</html>

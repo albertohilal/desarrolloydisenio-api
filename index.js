@@ -16,6 +16,12 @@ app.use(express.static(path.join(__dirname, 'public')));
 const grillasRoutes = require('./routes/grillas');
 app.use('/api/grillas', grillasRoutes);
 
+const rubrosRoutes = require('./routes/rubros');
+app.use('/api/rubros', rubrosRoutes);
+
+const lugaresRoutes = require('./routes/lugares');
+app.use('/api/lugares', lugaresRoutes);
+
 // Redirección inicial opcional
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'grilla_mapa.html'));
