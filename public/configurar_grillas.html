@@ -98,6 +98,10 @@
       <button id="btnGuardar" disabled>💾 Guardar Estados</button>
       <button id="btnCiclar">🔄 Ciclar Estado (Click)</button>
       <button id="btnCopiar" style="background: #17a2b8;">📋 Copiar a Otros Rubros</button>
+      <label style="display: flex; align-items: center; gap: 5px; background: white; color: #333; padding: 8px 12px; border-radius: 5px; cursor: pointer;">
+        <input type="checkbox" id="chkMostrarCodigos" style="cursor: pointer;">
+        <span>Mostrar códigos</span>
+      </label>
     </div>
     <div class="stats">
       <span class="stat">Total: <span id="statTotal">0</span></span>
@@ -237,6 +241,13 @@
           rect.grillaId = celda.grilla_id;
           rect.yaBuscada = yaBuscada;
           
+          // Agregar tooltip on hover
+          const estadoTexto = yaBuscada ? 'Ya buscada' : estado.charAt(0).toUpperCase() + estado.slice(1);
+          rect.bindTooltip(`Código: ${celda.codigo}<br>Estado: ${estadoTexto}`, {
+            sticky: true,
+            opacity: 0.9
+          });
+          
           rect.on('click', () => {
             if (rect.yaBuscada) {
               alert('Esta celda ya fue buscada para este rubro');
@@ -252,6 +263,9 @@
         });
 
         actualizarEstadisticas();
+        
+        // Habilitar botón guardar siempre que hay una grilla cargada
+        document.getElementById('btnGuardar').disabled = false;
       } catch (error) {
         alert('Error al cargar grilla: ' + error.message);
         console.error(error);
@@ -266,6 +280,39 @@
       rect.estado = nuevoEstado;
       const color = colores[nuevoEstado];
       rect.setStyle({ color, fillColor: color });
+      
+      // Actualizar tooltip
+      const estadoTexto = nuevoEstado.charAt(0).toUpperCase() + nuevoEstado.slice(1);
+      rect.setTooltipContent(`Código: ${rect.codigo}<br>Estado: ${estadoTexto}`);
+      
+      // Manejar label si el checkbox está activo
+      const mostrarCodigos = document.getElementById('chkMostrarCodigos').checked;
+      if (rect.label) {
+        map.removeLayer(rect.label);
+        rect.label = null;
+      }
+      
+      if (mostrarCodigos && nuevoEstado === 'seleccionado') {
+        const center = rect.getBounds().getCenter();
+        rect.label = L.marker(center, {
+          icon: L.divIcon({
+            className: 'codigo-label',
+            html: `<div style="
+              background: rgba(40, 167, 69, 0.9);
+              color: white;
+              padding: 2px 6px;
+              border-radius: 3px;
+              font-size: 11px;
+              font-weight: bold;
+              white-space: nowrap;
+              border: 1px solid white;
+              box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            ">${rect.codigo}</div>`,
+            iconSize: null
+          }),
+          interactive: false
+        }).addTo(map);
+      }
       
       cambiosPendientes.set(rect.grillaId, nuevoEstado);
       document.getElementById('btnGuardar').disabled = false;
@@ -307,18 +354,29 @@
     });
 
     document.getElementById('btnGuardar').addEventListener('click', async () => {
-      if (cambiosPendientes.size === 0) return;
-
       const btn = document.getElementById('btnGuardar');
       btn.disabled = true;
       btn.textContent = '⏳ Guardando...';
 
       try {
-        const actualizaciones = Array.from(cambiosPendientes.entries()).map(([grilla_id, estado]) => ({
-          grilla_id: parseInt(grilla_id),
-          rubro_id: parseInt(rubroActual),
-          estado
-        }));
+        // Guardar solo los estados NO-pendientes (seleccionado, revisar, descartado)
+        const actualizaciones = [];
+        rectangulos.forEach(rect => {
+          if (!rect.yaBuscada && rect.estado !== 'pendiente') {
+            actualizaciones.push({
+              grilla_id: rect.grillaId,
+              rubro_id: parseInt(rubroActual),
+              estado: rect.estado
+            });
+          }
+        });
+
+        if (actualizaciones.length === 0) {
+          alert('No hay cambios que guardar');
+          btn.disabled = false;
+          btn.textContent = '💾 Guardar Estados';
+          return;
+        }
 
         const res = await fetch('/api/grillas/estados/batch', {
           method: 'POST',
@@ -425,17 +483,39 @@
         btnConfirmar.disabled = true;
         btnConfirmar.textContent = '⏳ Copiando...';
 
+        // Crear barra de progreso
+        const progressDiv = document.createElement('div');
+        progressDiv.style.cssText = 'margin-top: 15px; text-align: center;';
+        progressDiv.innerHTML = `
+          <div style="background: #f0f0f0; border-radius: 10px; height: 20px; overflow: hidden; margin-bottom: 10px;">
+            <div id="progressBar" style="background: linear-gradient(to right, #4CAF50, #45a049); height: 100%; width: 0%; transition: width 0.3s;"></div>
+          </div>
+          <div id="progressText">Preparando...</div>
+        `;
+        btnConfirmar.parentElement.appendChild(progressDiv);
+
         try {
-          // Obtener todos los estados actuales del rubro origen
+          // Obtener SOLO las celdas seleccionadas del rubro origen
           const estadosActuales = [];
           rectangulos.forEach(rect => {
-            if (!rect.yaBuscada) {
+            if (!rect.yaBuscada && rect.estado === 'seleccionado') {
               estadosActuales.push({
                 grilla_id: rect.grillaId,
                 estado: rect.estado
               });
             }
           });
+
+          if (estadosActuales.length === 0) {
+            alert('No hay celdas seleccionadas para copiar');
+            btnConfirmar.disabled = false;
+            btnConfirmar.textContent = 'Copiar Configuración';
+            progressDiv.remove();
+            return;
+          }
+
+          progressDiv.querySelector('#progressText').textContent = 
+            `Copiando ${estadosActuales.length} celdas a ${rubrosSeleccionados.length} rubros...`;
 
           // Crear actualizaciones para cada rubro destino
           const actualizaciones = [];
@@ -449,6 +529,10 @@
             });
           });
 
+          progressDiv.querySelector('#progressBar').style.width = '50%';
+          progressDiv.querySelector('#progressText').textContent = 
+            `Enviando ${actualizaciones.length} actualizaciones...`;
+
           const res = await fetch('/api/grillas/estados/batch', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -457,12 +541,53 @@
 
           if (!res.ok) throw new Error('Error al copiar');
 
-          modal.remove();
+          progressDiv.querySelector('#progressBar').style.width = '100%';
+          progressDiv.querySelector('#progressText').textContent = '✅ ¡Copiado exitosamente!';
+          
+          setTimeout(() => {
+            modal.remove();
+          }, 1500);
           alert(`✅ Configuración copiada exitosamente a ${rubrosSeleccionados.length} rubro(s)`);
         } catch (error) {
           alert('Error al copiar: ' + error.message);
           btnConfirmar.disabled = false;
           btnConfirmar.textContent = 'Copiar Configuración';
+        }
+      });
+    });
+
+    // Checkbox para mostrar/ocultar códigos
+    document.getElementById('chkMostrarCodigos').addEventListener('change', (e) => {
+      const mostrar = e.target.checked;
+      
+      rectangulos.forEach(rect => {
+        // Remover label existente si hay
+        if (rect.label) {
+          map.removeLayer(rect.label);
+          rect.label = null;
+        }
+        
+        // Si está marcado Y la celda está seleccionada, mostrar label
+        if (mostrar && rect.estado === 'seleccionado' && !rect.yaBuscada) {
+          const center = rect.getBounds().getCenter();
+          rect.label = L.marker(center, {
+            icon: L.divIcon({
+              className: 'codigo-label',
+              html: `<div style="
+                background: rgba(40, 167, 69, 0.9);
+                color: white;
+                padding: 2px 6px;
+                border-radius: 3px;
+                font-size: 11px;
+                font-weight: bold;
+                white-space: nowrap;
+                border: 1px solid white;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+              ">${rect.codigo}</div>`,
+              iconSize: null
+            }),
+            interactive: false
+          }).addTo(map);
         }
       });
     });

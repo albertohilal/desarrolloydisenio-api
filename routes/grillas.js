@@ -122,7 +122,7 @@ router.put('/estados/:grillaId/:rubroId', async (req, res) => {
   }
 });
 
-// Actualizar múltiples estados a la vez
+// Actualizar múltiples estados a la vez (OPTIMIZADO)
 router.post('/estados/batch', async (req, res) => {
   const { actualizaciones } = req.body; // Array de {grilla_id, rubro_id, estado}
   
@@ -130,20 +130,30 @@ router.post('/estados/batch', async (req, res) => {
     return res.status(400).json({ error: 'Se requiere array de actualizaciones' });
   }
   
+  console.log(`📦 Procesando ${actualizaciones.length} actualizaciones...`);
+  
   try {
     const connection = await pool.getConnection();
     await connection.beginTransaction();
     
     try {
-      for (const act of actualizaciones) {
+      // Agrupar por área para optimizar (procesar en chunks de 500)
+      const chunkSize = 500;
+      for (let i = 0; i < actualizaciones.length; i += chunkSize) {
+        const chunk = actualizaciones.slice(i, i + chunkSize);
+        const values = chunk.map(act => [act.grilla_id, act.rubro_id, act.estado]);
+        
         await connection.query(`
           INSERT INTO ll_grilla_rubros (grilla_id, rubro_id, estado)
-          VALUES (?, ?, ?)
+          VALUES ?
           ON DUPLICATE KEY UPDATE estado = VALUES(estado)
-        `, [act.grilla_id, act.rubro_id, act.estado]);
+        `, [values]);
+        
+        console.log(`✅ Procesado chunk ${i + chunk.length}/${actualizaciones.length}`);
       }
       
       await connection.commit();
+      console.log(`🎉 ${actualizaciones.length} estados actualizados exitosamente`);
       res.json({ success: true, message: `${actualizaciones.length} estados actualizados` });
     } catch (error) {
       await connection.rollback();
