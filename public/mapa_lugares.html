@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mapa de Lugares</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+    }
+    
+    .container {
+      max-width: 100%;
+      padding: 20px;
+    }
+    
+    .header {
+      text-align: center;
+      color: white;
+      margin-bottom: 20px;
+    }
+    
+    .header h1 {
+      font-size: 2.5rem;
+      margin-bottom: 10px;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+    }
+    
+    .header p {
+      font-size: 1.1rem;
+      opacity: 0.9;
+    }
+    
+    .controls {
+      background: white;
+      border-radius: 15px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    }
+    
+    .control-row {
+      display: flex;
+      gap: 15px;
+      flex-wrap: wrap;
+      margin-bottom: 15px;
+    }
+    
+    .control-group {
+      flex: 1;
+      min-width: 200px;
+    }
+    
+    .control-group label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: 600;
+      color: #333;
+    }
+    
+    .control-group select,
+    .control-group input {
+      width: 100%;
+      padding: 10px;
+      border: 2px solid #ddd;
+      border-radius: 8px;
+      font-size: 1rem;
+      transition: border-color 0.3s;
+    }
+    
+    .control-group select:focus,
+    .control-group input:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+    
+    .stats {
+      display: flex;
+      gap: 15px;
+      flex-wrap: wrap;
+    }
+    
+    .stat-box {
+      flex: 1;
+      min-width: 150px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 15px;
+      border-radius: 10px;
+      text-align: center;
+    }
+    
+    .stat-box .value {
+      font-size: 2rem;
+      font-weight: bold;
+      margin-bottom: 5px;
+    }
+    
+    .stat-box .label {
+      font-size: 0.9rem;
+      opacity: 0.9;
+    }
+    
+    #map {
+      height: 600px;
+      border-radius: 15px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    }
+    
+    .leaflet-popup-content {
+      margin: 15px;
+      line-height: 1.6;
+    }
+    
+    .popup-title {
+      font-size: 1.2rem;
+      font-weight: bold;
+      color: #667eea;
+      margin-bottom: 10px;
+    }
+    
+    .popup-info {
+      margin: 5px 0;
+      color: #555;
+    }
+    
+    .popup-info strong {
+      color: #333;
+    }
+    
+    .popup-link {
+      display: inline-block;
+      margin-top: 10px;
+      padding: 8px 15px;
+      background: #667eea;
+      color: white;
+      text-decoration: none;
+      border-radius: 5px;
+      transition: background 0.3s;
+    }
+    
+    .popup-link:hover {
+      background: #764ba2;
+    }
+    
+    .loading {
+      text-align: center;
+      padding: 20px;
+      color: white;
+      font-size: 1.2rem;
+    }
+    
+    .error {
+      background: #ff4444;
+      color: white;
+      padding: 15px;
+      border-radius: 10px;
+      margin: 20px 0;
+      text-align: center;
+    }
+    
+    @media (max-width: 768px) {
+      .header h1 {
+        font-size: 1.8rem;
+      }
+      
+      .control-row {
+        flex-direction: column;
+      }
+      
+      #map {
+        height: 400px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1 id="pageTitle">🗺️ Mapa de Lugares</h1>
+      <p id="pageDescription">Explora lugares en el mapa interactivo</p>
+    </div>
+    
+    <div class="controls">
+      <div class="control-row">
+        <div class="control-group">
+          <label for="rubroSelect">Rubro:</label>
+          <select id="rubroSelect">
+            <option value="">Seleccionar rubro...</option>
+          </select>
+        </div>
+        
+        <div class="control-group">
+          <label for="zonaSelect">Zona:</label>
+          <select id="zonaSelect">
+            <option value="">Todas las zonas</option>
+          </select>
+        </div>
+        
+        <div class="control-group">
+          <label for="searchInput">Buscar:</label>
+          <input type="text" id="searchInput" placeholder="Buscar por nombre...">
+        </div>
+      </div>
+      
+      <div class="stats">
+        <div class="stat-box">
+          <div class="value" id="totalLugares">0</div>
+          <div class="label">Total de Lugares</div>
+        </div>
+        <div class="stat-box">
+          <div class="value" id="lugaresVisibles">0</div>
+          <div class="label">Visibles en Mapa</div>
+        </div>
+        <div class="stat-box">
+          <div class="value" id="zonasActivas">0</div>
+          <div class="label">Zonas Activas</div>
+        </div>
+      </div>
+    </div>
+    
+    <div id="loading" class="loading" style="display: none;">Cargando datos...</div>
+    <div id="error" class="error" style="display: none;"></div>
+    
+    <div id="map"></div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    // Variables globales
+    let map;
+    let markers = [];
+    let todosLosLugares = [];
+    let rubros = [];
+    let zonas = [];
+    
+    // Obtener parámetro rubro de la URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const rubroParam = urlParams.get('rubro');
+    
+    // Inicializar mapa
+    function initMap() {
+      map = L.map('map').setView([-34.7604, -58.3667], 12);
+      
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors',
+        maxZoom: 19
+      }).addTo(map);
+    }
+    
+    // Crear popup content
+    function crearPopupContent(lugar) {
+      let html = `<div class="popup-title">${lugar.nombre || 'Sin nombre'}</div>`;
+      
+      if (lugar.direccion) {
+        html += `<div class="popup-info"><strong>📍</strong> ${lugar.direccion}</div>`;
+      }
+      
+      if (lugar.telefono) {
+        html += `<div class="popup-info"><strong>📞</strong> ${lugar.telefono}</div>`;
+      }
+      
+      if (lugar.rating) {
+        html += `<div class="popup-info"><strong>⭐</strong> ${lugar.rating} (${lugar.user_ratings_total || 0} reseñas)</div>`;
+      }
+      
+      if (lugar.rubro_nombre) {
+        html += `<div class="popup-info"><strong>🏷️</strong> ${lugar.rubro_nombre}</div>`;
+      }
+      
+      if (lugar.zona_nombre) {
+        html += `<div class="popup-info"><strong>🗺️</strong> ${lugar.zona_nombre}</div>`;
+      }
+      
+      if (lugar.website) {
+        html += `<a href="${lugar.website}" target="_blank" class="popup-link">Visitar sitio web</a>`;
+      }
+      
+      if (lugar.place_id) {
+        html += `<a href="https://www.google.com/maps/place/?q=place_id:${lugar.place_id}" target="_blank" class="popup-link" style="margin-left: 5px;">Ver en Google Maps</a>`;
+      }
+      
+      return html;
+    }
+    
+    // Agregar marcador al mapa
+    function agregarMarcador(lugar) {
+      if (!lugar.latitud || !lugar.longitud) return null;
+      
+      const marker = L.marker([lugar.latitud, lugar.longitud])
+        .bindPopup(crearPopupContent(lugar));
+      
+      marker.lugar = lugar;
+      markers.push(marker);
+      marker.addTo(map);
+      
+      return marker;
+    }
+    
+    // Filtrar y mostrar lugares
+    function filtrarYMostrar() {
+      const rubroSeleccionado = document.getElementById('rubroSelect').value;
+      const zonaSeleccionada = document.getElementById('zonaSelect').value;
+      const textoBusqueda = document.getElementById('searchInput').value.toLowerCase();
+      
+      // Remover todos los marcadores
+      markers.forEach(marker => marker.remove());
+      markers = [];
+      
+      // Filtrar lugares
+      const lugaresFiltrados = todosLosLugares.filter(lugar => {
+        // Filtro por rubro
+        if (rubroSeleccionado && lugar.rubro_id != rubroSeleccionado) {
+          return false;
+        }
+        
+        // Filtro por zona
+        if (zonaSeleccionada && lugar.zona_id != zonaSeleccionada) {
+          return false;
+        }
+        
+        // Filtro por búsqueda de texto
+        if (textoBusqueda) {
+          const nombre = (lugar.nombre || '').toLowerCase();
+          const direccion = (lugar.direccion || '').toLowerCase();
+          if (!nombre.includes(textoBusqueda) && !direccion.includes(textoBusqueda)) {
+            return false;
+          }
+        }
+        
+        return true;
+      });
+      
+      // Agregar marcadores filtrados
+      lugaresFiltrados.forEach(lugar => agregarMarcador(lugar));
+      
+      // Ajustar vista del mapa si hay marcadores
+      if (markers.length > 0) {
+        const group = L.featureGroup(markers);
+        map.fitBounds(group.getBounds().pad(0.1));
+      }
+      
+      // Actualizar estadísticas
+      document.getElementById('lugaresVisibles').textContent = lugaresFiltrados.length;
+    }
+    
+    // Cargar rubros
+    async function cargarRubros() {
+      try {
+        const response = await fetch('/api/rubros/rubros-activos');
+        if (!response.ok) throw new Error('Error al cargar rubros');
+        
+        rubros = await response.json();
+        const select = document.getElementById('rubroSelect');
+        
+        rubros.forEach(rubro => {
+          const option = document.createElement('option');
+          option.value = rubro.id;
+          option.textContent = rubro.nombre;
+          select.appendChild(option);
+        });
+        
+        // Si hay parámetro rubro en URL, buscar y seleccionar
+        if (rubroParam) {
+          const rubroEncontrado = rubros.find(r => 
+            r.nombre.toLowerCase().includes(rubroParam.toLowerCase())
+          );
+          
+          if (rubroEncontrado) {
+            select.value = rubroEncontrado.id;
+            document.getElementById('pageTitle').textContent = `🗺️ Mapa de ${rubroEncontrado.nombre}`;
+            document.getElementById('pageDescription').textContent = `Explora ${rubroEncontrado.nombre.toLowerCase()} en el mapa`;
+          }
+        }
+        
+      } catch (error) {
+        console.error('Error cargando rubros:', error);
+      }
+    }
+    
+    // Cargar zonas
+    async function cargarZonas() {
+      try {
+        const response = await fetch('/api/grillas/zonas');
+        if (!response.ok) throw new Error('Error al cargar zonas');
+        
+        zonas = await response.json();
+        const select = document.getElementById('zonaSelect');
+        
+        zonas.forEach(zona => {
+          const option = document.createElement('option');
+          option.value = zona.id;
+          option.textContent = zona.nombre;
+          select.appendChild(option);
+        });
+        
+        document.getElementById('zonasActivas').textContent = zonas.length;
+        
+      } catch (error) {
+        console.error('Error cargando zonas:', error);
+      }
+    }
+    
+    // Cargar lugares
+    async function cargarLugares() {
+      const loading = document.getElementById('loading');
+      const errorDiv = document.getElementById('error');
+      
+      loading.style.display = 'block';
+      errorDiv.style.display = 'none';
+      
+      try {
+        // Cargar todos los lugares de la base de datos
+        const response = await fetch('/api/lugares/todos');
+        if (!response.ok) {
+          throw new Error('Error al cargar lugares');
+        }
+        
+        todosLosLugares = await response.json();
+        
+        if (todosLosLugares.length === 0) {
+          throw new Error('No se encontraron lugares en la base de datos');
+        }
+        
+        // Actualizar estadísticas
+        document.getElementById('totalLugares').textContent = todosLosLugares.length;
+        
+        // Aplicar filtros y mostrar
+        filtrarYMostrar();
+        
+        loading.style.display = 'none';
+        
+      } catch (error) {
+        console.error('Error:', error);
+        loading.style.display = 'none';
+        errorDiv.textContent = `Error: ${error.message}`;
+        errorDiv.style.display = 'block';
+      }
+    }
+    
+    // Event listeners
+    document.getElementById('rubroSelect').addEventListener('change', filtrarYMostrar);
+    document.getElementById('zonaSelect').addEventListener('change', filtrarYMostrar);
+    document.getElementById('searchInput').addEventListener('input', filtrarYMostrar);
+    
+    // Inicializar aplicación
+    async function init() {
+      initMap();
+      await cargarRubros();
+      await cargarZonas();
+      await cargarLugares();
+    }
+    
+    init();
+  </script>
+</body>
+</html>
