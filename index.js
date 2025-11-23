@@ -23,6 +23,9 @@ app.use('/api/rubros', rubrosRoutes);
 const lugaresRoutes = require('./routes/lugares');
 app.use('/api/lugares', lugaresRoutes);
 
+const busquedasRoutes = require('./routes/busquedas');
+app.use('/api/busquedas', busquedasRoutes);
+
 // Página de inicio
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
