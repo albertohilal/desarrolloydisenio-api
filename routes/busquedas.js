@@ -15,19 +15,30 @@ router.post('/ejecutar-grilla', async (req, res) => {
   
   console.log(`🔍 Ejecutando búsqueda: Rubro ${rubroId}, Grilla ${grilla}`);
   
-  // Ejecutar script en background
+  // Crear archivo de log
+  const fs = require('fs');
+  const logsDir = path.join(__dirname, '../logs');
+  if (!fs.existsSync(logsDir)) fs.mkdirSync(logsDir, { recursive: true });
+  
+  const logFile = path.join(logsDir, `busqueda_rubro_${rubroId}_${Date.now()}.log`);
+  const logStream = fs.createWriteStream(logFile, { flags: 'a' });
+  
+  // Ejecutar script en background con logs
   const scriptPath = path.join(__dirname, '../scripts/busqueda/buscar_con_grilla_v2.js');
   const proceso = spawn('node', [scriptPath, rubroId, grilla], {
     detached: true,
-    stdio: 'ignore'
+    stdio: ['ignore', logStream, logStream]
   });
   
   proceso.unref();
   
+  console.log(`📄 Log guardado en: ${logFile}`);
+  
   res.json({ 
     success: true, 
     message: `Búsqueda iniciada para rubro ${rubroId}`,
-    pid: proceso.pid
+    pid: proceso.pid,
+    logFile: logFile
   });
 });
 
